@@ -104,6 +104,11 @@ class HealthDataStore: ObservableObject {
             
             saveData()
             saveData()
+            
+            // Sync to Supabase
+            Task {
+                await SyncManager.shared.uploadDailyStats(data: newData)
+            }
         } catch {
             print("Failed to fetch today's data: \(error)")
             lastErrorMessage = "Today Sync Error: \(error.localizedDescription)"
@@ -156,6 +161,11 @@ class HealthDataStore: ObservableObject {
             
             allDailyData = updatedData.sorted { $0.date > $1.date }
             saveData()
+            
+            // Sync to Supabase
+            Task {
+                await SyncManager.shared.uploadBatchStats(dataList: updatedData)
+            }
             
             // Update today's data
             let today = calendar.startOfDay(for: Date())
@@ -242,6 +252,11 @@ class HealthDataStore: ObservableObject {
             allDailyData = mergedData.sorted { $0.date > $1.date }
             saveData()
             
+            // Sync to Supabase
+            Task {
+                await SyncManager.shared.uploadBatchStats(dataList: mergedData)
+            }
+            
             // Mark as imported
             userDefaults.set(true, forKey: hasImportedKey)
             
@@ -323,6 +338,11 @@ class HealthDataStore: ObservableObject {
                     
                     allDailyData.sort { $0.date > $1.date }
                     saveData()
+                    
+                    // Sync to Supabase
+                    Task {
+                        await SyncManager.shared.uploadBatchStats(dataList: allDailyData)
+                    }
                     
                     // Update today's data
                     todayData = allDailyData.first { calendar.isDate($0.date, inSameDayAs: today) }

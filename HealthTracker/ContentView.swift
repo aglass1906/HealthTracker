@@ -10,6 +10,7 @@ import Charts
 import UIKit
 
 struct ContentView: View {
+    @StateObject private var authManager = AuthManager.shared
     @State private var selectedTab = 0
     @StateObject private var dataStore = HealthDataStore.shared
     @StateObject private var healthKitManager = HealthKitManager.shared
@@ -17,51 +18,63 @@ struct ContentView: View {
     @State private var pendingAuthorization = false
     
     var body: some View {
-        TabView(selection: $selectedTab) {
-            DashboardView()
-                .tabItem {
-                    Label("Dashboard", systemImage: "chart.bar.fill")
+        Group {
+            if authManager.isAuthenticated {
+                TabView(selection: $selectedTab) {
+                    DashboardView()
+                        .tabItem {
+                            Label("Dashboard", systemImage: "chart.bar.fill")
+                        }
+                        .tag(0)
+                    
+                    AllDataView()
+                        .tabItem {
+                            Label("All Data", systemImage: "list.bullet.rectangle")
+                        }
+                        .tag(1)
+                    
+                    SummaryView()
+                        .tabItem {
+                            Label("Summary", systemImage: "chart.line.uptrend.xyaxis")
+                        }
+                        .tag(2)
+                    
+                    FamilyView()
+                        .tabItem {
+                            Label("Family", systemImage: "person.3.fill")
+                        }
+                        .tag(3)
+                    
+                    ProfileView()
+                        .tabItem {
+                            Label("Profile", systemImage: "person.circle.fill")
+                        }
+                        .tag(4)
                 }
-                .tag(0)
-            
-            AllDataView()
-                .tabItem {
-                    Label("All Data", systemImage: "list.bullet.rectangle")
+                .tint(.blue)
+                .task {
+                    // Import latest data on app startup
+                    await dataStore.importLatestData()
                 }
-                .tag(1)
-            
-            SummaryView()
-                .tabItem {
-                    Label("Summary", systemImage: "chart.line.uptrend.xyaxis")
+                .onChange(of: healthKitManager.isAuthorized) { oldValue, newValue in
+                    // When authorization changes to true, check if we should prompt for import
+                    if newValue && !oldValue && !dataStore.hasImportedData {
+                        showingImportAlert = true
+                    }
                 }
-                .tag(2)
-            
-            ProfileView()
-                .tabItem {
-                    Label("Profile", systemImage: "person.circle.fill")
+                .alert("Import Health Data", isPresented: $showingImportAlert) {
+                    Button("Import Last 30 Days") {
+                        Task {
+                            await dataStore.importLast30Days()
+                        }
+                    }
+                    Button("Not Now", role: .cancel) { }
+                } message: {
+                    Text("Would you like to import your health data for the last 30 days? This will sync your steps, flights, calories, workouts, and activity rings.")
                 }
-                .tag(3)
-        }
-        .tint(.blue)
-        .task {
-            // Import latest data on app startup
-            await dataStore.importLatestData()
-        }
-        .onChange(of: healthKitManager.isAuthorized) { oldValue, newValue in
-            // When authorization changes to true, check if we should prompt for import
-            if newValue && !oldValue && !dataStore.hasImportedData {
-                showingImportAlert = true
+            } else {
+                LoginView()
             }
-        }
-        .alert("Import Health Data", isPresented: $showingImportAlert) {
-            Button("Import Last 30 Days") {
-                Task {
-                    await dataStore.importLast30Days()
-                }
-            }
-            Button("Not Now", role: .cancel) { }
-        } message: {
-            Text("Would you like to import your health data for the last 30 days? This will sync your steps, flights, calories, workouts, and activity rings.")
         }
     }
 }
