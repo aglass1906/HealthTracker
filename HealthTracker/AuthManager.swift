@@ -62,6 +62,22 @@ class AuthManager: ObservableObject {
     }
     
     @MainActor
+    func signInWithPassword(email: String, password: String) async {
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            let session = try await client.auth.signIn(email: email, password: password)
+            self.session = session
+            self.isAuthenticated = true
+        } catch {
+            errorMessage = "Login Error: \(error.localizedDescription)"
+        }
+        
+        isLoading = false
+    }
+    
+    @MainActor
     func verifyOTP(email: String, token: String) async {
         isLoading = true
         errorMessage = nil

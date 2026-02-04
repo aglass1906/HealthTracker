@@ -8,6 +8,7 @@
 import SwiftUI
 import Charts
 import UIKit
+import Supabase
 
 struct ContentView: View {
     @StateObject private var authManager = AuthManager.shared
@@ -933,8 +934,13 @@ struct ProfileView: View {
                                     .foregroundStyle(.blue)
                             }
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Health Tracker")
-                                .font(.headline)
+                            if let email = AuthManager.shared.session?.user.email {
+                                Text(email)
+                                    .font(.headline)
+                            } else {
+                                Text("Health Tracker")
+                                    .font(.headline)
+                            }
                             Text(healthKitManager.isAuthorized ? "Connected" : "Not Connected")
                                 .font(.subheadline)
                                 .foregroundStyle(healthKitManager.isAuthorized ? .green : .orange)
@@ -1028,6 +1034,20 @@ struct ProfileView: View {
                 Section {
                     SettingsRow(icon: "info.circle.fill", title: "About", color: .gray)
                     SettingsRow(icon: "questionmark.circle.fill", title: "Help & Support", color: .gray)
+                }
+                
+                Section {
+                    Button(role: .destructive) {
+                        Task {
+                            await AuthManager.shared.signOut()
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                            Text("Sign Out")
+                            Spacer()
+                        }
+                    }
                 }
             }
             .navigationTitle("Profile")

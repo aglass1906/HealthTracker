@@ -11,12 +11,15 @@ struct LoginView: View {
     @StateObject private var authManager = AuthManager.shared
     @State private var email = ""
     @State private var otpCode = ""
+    @State private var password = ""
     @State private var isCodeSent = false
+    @State private var usePassword = false
     @FocusState private var focusedField: Field?
     
     enum Field {
         case email
         case code
+        case password
     }
     
     var body: some View {
@@ -32,16 +35,72 @@ struct LoginView: View {
                         .font(.largeTitle)
                         .fontWeight(.bold)
                     
-                    Text(isCodeSent ? "Enter the code sent to your email" : "Sign in to join family challenges")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+                    if !usePassword {
+                        Text(isCodeSent ? "Enter the code sent to your email" : "Sign in to join family challenges")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    } else {
+                        Text("Sign in with Password (Test/Review)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
                 }
                 .padding(.top, 40)
                 
                 // Form
                 VStack(spacing: 16) {
-                    if !isCodeSent {
+                    if usePassword {
+                        // Password Flow
+                        TextField("Email Address", text: $email)
+                            .textContentType(.emailAddress)
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding()
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(12)
+                            .focused($focusedField, equals: .email)
+                        
+                        SecureField("Password", text: $password)
+                            .padding()
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(12)
+                            .focused($focusedField, equals: .password)
+                            .submitLabel(.go)
+                            .onSubmit {
+                                loginWithPassword()
+                            }
+                        
+                        Button {
+                            loginWithPassword()
+                        } label: {
+                            HStack {
+                                if authManager.isLoading {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Text("Sign In")
+                                }
+                            }
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(isValidEmail && !password.isEmpty ? Color.blue : Color.gray.opacity(0.3))
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
+                        .disabled(!isValidEmail || password.isEmpty || authManager.isLoading)
+                        
+                        Button("Use Email Code instead") {
+                            usePassword = false
+                        }
+                        .font(.caption)
+                        .padding(.top)
+                        
+                    } else if !isCodeSent {
+                        // Email Entry Flow
                         TextField("Email Address", text: $email)
                             .textContentType(.emailAddress)
                             .keyboardType(.emailAddress)
@@ -75,7 +134,16 @@ struct LoginView: View {
                             .cornerRadius(12)
                         }
                         .disabled(!isValidEmail || authManager.isLoading)
+                        
+                        Button("I have a password") {
+                            usePassword = true
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top)
+                        
                     } else {
+                        // OTP Entry Flow
                         TextField("6-Digit Code", text: $otpCode)
                             .keyboardType(.numberPad)
                             .padding()
@@ -153,12 +221,19 @@ struct LoginView: View {
         }
     }
     
+    private func loginWithPassword() {
+        Task {
+            await authManager.signInWithPassword(email: email, password: password)
+        }
+    }
+    
     private func verifyCode() {
         Task {
             await authManager.verifyOTP(email: email, token: otpCode)
         }
     }
 }
+
 
 #Preview {
     LoginView()
