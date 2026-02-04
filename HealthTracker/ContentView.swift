@@ -916,9 +916,12 @@ struct ChartView: View {
 struct ProfileView: View {
     @StateObject private var healthKitManager = HealthKitManager.shared
     @StateObject private var dataStore = HealthDataStore.shared
+    @StateObject private var authManager = AuthManager.shared
     @State private var showingAuthorization = false
     @State private var showingUnauthorizeAlert = false
     @State private var showingSettingsAlert = false
+    @State private var showingEditProfile = false
+    @State private var currentProfile: Profile?
     
     var body: some View {
         NavigationStack {
@@ -929,17 +932,29 @@ struct ProfileView: View {
                             .fill(Color.blue.opacity(0.2))
                             .frame(width: 60, height: 60)
                             .overlay {
-                                Image(systemName: "person.fill")
+                                Text(getInitials())
                                     .font(.title2)
+                                    .fontWeight(.bold)
                                     .foregroundStyle(.blue)
                             }
                         VStack(alignment: .leading, spacing: 4) {
-                            if let email = AuthManager.shared.session?.user.email {
+                            HStack {
+                                Text(getDisplayName())
+                                    .font(.headline)
+                                
+                                Button {
+                                    showingEditProfile = true
+                                } label: {
+                                    Image(systemName: "pencil.circle.fill")
+                                        .foregroundStyle(.blue)
+                                        .font(.title3)
+                                }
+                            }
+                            
+                            if let email = authManager.session?.user.email {
                                 Text(email)
-                                    .font(.headline)
-                            } else {
-                                Text("Health Tracker")
-                                    .font(.headline)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                             Text(healthKitManager.isAuthorized ? "Connected" : "Not Connected")
                                 .font(.subheadline)
@@ -956,11 +971,11 @@ struct ProfileView: View {
                         } label: {
                             HStack {
                                 Image(systemName: "heart.text.square.fill")
-                                    .foregroundStyle(.red)
+                                .foregroundStyle(.red)
                                 Text("Authorize HealthKit")
                                 Spacer()
                                 Image(systemName: "chevron.right")
-                                    .foregroundStyle(.secondary)
+                                .foregroundStyle(.secondary)
                             }
                         }
                     } else {
@@ -1054,6 +1069,13 @@ struct ProfileView: View {
             .sheet(isPresented: $showingAuthorization) {
                 AuthorizationView()
             }
+            .sheet(isPresented: $showingEditProfile, onDismiss: {
+                Task {
+                    await fetchProfile()
+                }
+            }) {
+                EditProfileView()
+            }
             .alert("Unauthorize HealthKit", isPresented: $showingUnauthorizeAlert) {
                 Button("Clear Data & Open Settings", role: .destructive) {
                     // Clear local data and authorization state
@@ -1075,7 +1097,33 @@ struct ProfileView: View {
             } message: {
                 Text("To fully revoke HealthKit permissions:\n\n1. Open Settings\n2. Go to Privacy & Security\n3. Select Health\n4. Find HealthTracker\n5. Turn off all permissions")
             }
+            .task {
+                await fetchProfile()
+            }
         }
+    }
+    
+    private func fetchProfile() async {
+        self.currentProfile = await AuthManager.shared.fetchCurrentUserProfile()
+    }
+    
+    private func getDisplayName() -> String {
+        return currentProfile?.display_name ?? authManager.session?.user.email ?? "Health Tracker"
+    }
+    
+    private func getInitials() -> String {
+        if let name = currentProfile?.display_name, !name.isEmpty {
+            let components = name.components(separatedBy: " ")
+            let first = components.first?.prefix(1) ?? ""
+            let last = components.count > 1 ? components.last?.prefix(1) ?? "" : ""
+            return "\(first)\(last)".uppercased()
+        }
+        
+        if let email = authManager.session?.user.email {
+            return String(email.prefix(2)).uppercased()
+        }
+        
+        return "HT"
     }
 }
 

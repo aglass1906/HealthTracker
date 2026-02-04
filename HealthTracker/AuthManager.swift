@@ -98,6 +98,56 @@ class AuthManager: ObservableObject {
     }
     
     @MainActor
+    func updateProfile(displayName: String) async {
+        guard let userValue = session?.user else { return }
+        
+        isLoading = true
+        errorMessage = nil
+        
+        struct ProfileUpdate: Encodable {
+            let display_name: String
+            let updated_at: Date
+        }
+        
+        let update = ProfileUpdate(display_name: displayName, updated_at: Date())
+        
+        do {
+            try await client
+                .from("profiles")
+                .update(update)
+                .eq("id", value: userValue.id)
+                .execute()
+            
+            // Note: We might want to refresh a local profile object here if we had one cached in AuthManager,
+            // but currently views fetch profiles directly or derive from session (which doesn't have display_name yet).
+            // Ideally we should store the full 'Profile' object in AuthManager too.
+        } catch {
+            errorMessage = "Update failed: \(error.localizedDescription)"
+        }
+        
+        isLoading = false
+    }
+
+    @MainActor
+    func fetchCurrentUserProfile() async -> Profile? {
+        guard let userValue = session?.user else { return nil }
+        
+        do {
+            let profile: Profile = try await client
+                .from("profiles")
+                .select()
+                .eq("id", value: userValue.id)
+                .single()
+                .execute()
+                .value
+            return profile
+        } catch {
+            print("Fetch profile error: \(error)")
+            return nil
+        }
+    }
+
+    @MainActor
     func signOut() async {
         do {
             try await client.auth.signOut()

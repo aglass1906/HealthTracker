@@ -20,6 +20,16 @@ struct LeaderboardEntry: Identifiable, Codable {
     
     // Joined profile
     let profile: Profile?
+    
+    enum CodingKeys: String, CodingKey {
+        case user_id
+        case date
+        case steps
+        case calories
+        case flights
+        case distance
+        case profile
+    }
 }
 
 class LeaderboardViewModel: ObservableObject {
@@ -59,7 +69,7 @@ class LeaderboardViewModel: ObservableObject {
             let stats: [DailyStat] = try await client
                 .from("daily_stats")
                 .select()
-                .in("user_id", value: userIds)
+                .in("user_id", values: userIds)
                 .eq("date", value: today)
                 .order("steps", ascending: false) // Rank by steps by default
                 .execute()
