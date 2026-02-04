@@ -211,7 +211,7 @@ struct LoginView: View {
     
     private func sendCode() {
         Task {
-            await authManager.signInWithOTP(email: email)
+            await authManager.signInWithOTP(email: email.lowercased())
             if authManager.errorMessage == nil {
                 withAnimation {
                     isCodeSent = true
@@ -223,13 +223,13 @@ struct LoginView: View {
     
     private func loginWithPassword() {
         Task {
-            await authManager.signInWithPassword(email: email, password: password)
+            await authManager.signInWithPassword(email: email.lowercased(), password: password)
         }
     }
     
     private func verifyCode() {
         Task {
-            await authManager.verifyOTP(email: email, token: otpCode)
+            await authManager.verifyOTP(email: email.lowercased(), token: otpCode)
         }
     }
 }
