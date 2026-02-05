@@ -194,7 +194,8 @@ struct FamilyView: View {
                         Picker("View", selection: $selectedTab) {
                             Text("Feed").tag(0)
                             Text("Leaderboard").tag(1)
-                            Text("Members").tag(2)
+                            Text("Challenges").tag(2)
+                            Text("Members").tag(3)
                         }
                         .pickerStyle(.segmented)
                         .padding()
@@ -205,6 +206,9 @@ struct FamilyView: View {
                             
                             LeaderboardView(familyId: family.id)
                                 .tag(1)
+                            
+                            ChallengesListView(familyId: family.id)
+                                .tag(2)
                             
                             List {
                                 Section("My Family: \(family.name)") {
@@ -247,7 +251,7 @@ struct FamilyView: View {
                                     }
                                 }
                             }
-                            .tag(2)
+                            .tag(3)
                         }
                         .tabViewStyle(.page(indexDisplayMode: .never))
                     }
