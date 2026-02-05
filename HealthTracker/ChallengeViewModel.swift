@@ -30,6 +30,7 @@ struct DailyStatDB: Codable {
 class ChallengeViewModel: ObservableObject {
     @Published var activeChallenges: [Challenge] = []
     @Published var participants: [ChallengeParticipant] = [] // For the selected challenge
+    @Published var creatorName: String?
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -119,6 +120,7 @@ class ChallengeViewModel: ObservableObject {
     func loadProgress(for challenge: Challenge) async {
         isLoading = true
         participants = []
+        creatorName = nil
         
         do {
             // 1. Get family profiles
@@ -128,6 +130,11 @@ class ChallengeViewModel: ObservableObject {
                 .eq("family_id", value: challenge.family_id)
                 .execute()
                 .value
+            
+            // Set Creator Name
+            if let creator = profiles.first(where: { $0.id == challenge.creator_id }) {
+                self.creatorName = creator.display_name ?? creator.email
+            }
             
             let userIds = profiles.map { $0.id }
             
@@ -197,5 +204,62 @@ class ChallengeViewModel: ObservableObject {
         }
         
         isLoading = false
+    }
+    
+    // MARK: - Edit/Delete Challenge
+    
+    func updateChallenge(challenge: Challenge, title: String, target: Int, startDate: Date, endDate: Date?) async -> Bool {
+        guard let userId = AuthManager.shared.session?.user.id, userId == challenge.creator_id else { return false }
+        
+        struct ChallengeUpdate: Encodable {
+            let title: String
+            let target_value: Int
+            let start_date: String
+            let end_date: String?
+        }
+        
+        // Format dates to ISO8601
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        let startString = formatter.string(from: startDate)
+        let endString = endDate.map { formatter.string(from: $0) }
+        
+        let updateData = ChallengeUpdate(
+            title: title,
+            target_value: target,
+            start_date: startString,
+            end_date: endString
+        )
+        
+        do {
+            try await client
+                .from("challenges")
+                .update(updateData)
+                .eq("id", value: challenge.id)
+                .execute()
+            
+            return true
+        } catch {
+            print("Update challenge error: \(error)")
+            errorMessage = "Failed to update challenge."
+            return false
+        }
+    }
+    
+    func deleteChallenge(challengeId: UUID) async -> Bool {
+        do {
+            try await client
+                .from("challenges")
+                .delete()
+                .eq("id", value: challengeId)
+                .execute()
+            
+            return true
+        } catch {
+            print("Delete challenge error: \(error)")
+            errorMessage = "Failed to delete challenge."
+            return false
+        }
     }
 }

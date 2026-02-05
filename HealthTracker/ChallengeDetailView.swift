@@ -6,10 +6,12 @@
 //
 
 import SwiftUI
+import Supabase
 
 struct ChallengeDetailView: View {
     let challenge: Challenge
     @StateObject private var viewModel = ChallengeViewModel()
+    @State private var showingEdit = false
     
     var body: some View {
         ScrollView {
@@ -26,20 +28,35 @@ struct ChallengeDetailView: View {
                         .fontWeight(.bold)
                         .multilineTextAlignment(.center)
                     
-                    Text("Goal: \(challenge.target_value) \(challenge.metric.unit)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(20)
+                    if challenge.type == .streak {
+                        Text("Goal: \(challenge.target_value) \(challenge.metric.unit) / day")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(20)
+                    } else {
+                        Text("Goal: \(challenge.target_value) \(challenge.metric.unit)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(20)
+                    }
                     
                     VStack(spacing: 4) {
+                        Text("Metric: \(challenge.metric.displayName)")
                         Text("Start: \(challenge.start_date.formatted(.dateTime.weekday().hour().minute()))")
                         if let endDate = challenge.end_date {
                             Text("End: \(endDate.formatted(.dateTime.weekday().hour().minute()))")
                         } else {
                             Text("Open Ended")
+                        }
+                        if let creatorName = viewModel.creatorName {
+                            Text("Created by \(creatorName)")
+                                .padding(.top, 4)
                         }
                     }
                     .font(.caption)
@@ -58,9 +75,10 @@ struct ChallengeDetailView: View {
                 } else {
                     LazyVStack(spacing: 16) {
                         ForEach(viewModel.participants) { participant in
-                            ParticipantRow(participant: participant, target: Double(challenge.target_value), metric: challenge.metric)
+                            ParticipantRow(participant: participant, target: Double(challenge.target_value), metric: challenge.metric, type: challenge.type)
                         }
                     }
+                    .padding(.horizontal)
                     .padding(.horizontal)
                 }
             }
@@ -68,6 +86,20 @@ struct ChallengeDetailView: View {
         }
         .navigationTitle("Challenge")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if challenge.creator_id == AuthManager.shared.session?.user.id {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Edit") {
+                        showingEdit = true
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingEdit, onDismiss: {
+            Task { await viewModel.loadProgress(for: challenge) }
+        }) {
+            EditChallengeView(challenge: challenge, viewModel: viewModel)
+        }
         .task {
             await viewModel.loadProgress(for: challenge)
         }
@@ -81,6 +113,7 @@ struct ParticipantRow: View {
     let participant: ChallengeParticipant
     let target: Double
     let metric: ChallengeMetric
+    let type: ChallengeType // Pass type down
     
     var body: some View {
         VStack(spacing: 8) {
@@ -99,9 +132,16 @@ struct ParticipantRow: View {
                 VStack(alignment: .leading) {
                     Text(participant.profile.display_name ?? "Unknown")
                         .fontWeight(.semibold)
-                    Text("\(Int(participant.value)) / \(Int(target))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    
+                    if type == .streak {
+                        Text("\(Int(participant.value)) Day Streak")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("\(Int(participant.value)) / \(Int(target))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 
                 Spacer()
