@@ -177,6 +177,8 @@ class ChallengeViewModel: ObservableObject {
                 case .exercise_minutes:
                      // Fallback if column missing or logic TODO
                     totalValue = 0 
+                case .flights:
+                    totalValue = Double(userStats.reduce(0) { $0 + $1.flights })
                 }
                 
                 let progress = totalValue / Double(challenge.target_value)

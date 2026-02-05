@@ -74,6 +74,7 @@ enum ChallengeMetric: String, Codable, CaseIterable {
     case calories
     case distance
     case exercise_minutes
+    case flights
     
     var displayName: String {
         switch self {
@@ -81,6 +82,7 @@ enum ChallengeMetric: String, Codable, CaseIterable {
         case .calories: return "Calories"
         case .distance: return "Distance (mi)"
         case .exercise_minutes: return "Exercise (min)"
+        case .flights: return "Stairs"
         }
     }
     
@@ -90,6 +92,7 @@ enum ChallengeMetric: String, Codable, CaseIterable {
         case .calories: return "kcal"
         case .distance: return "miles"
         case .exercise_minutes: return "mins"
+        case .flights: return "flights"
         }
     }
     
@@ -99,6 +102,7 @@ enum ChallengeMetric: String, Codable, CaseIterable {
         case .calories: return "flame"
         case .distance: return "map"
         case .exercise_minutes: return "figure.run"
+        case .flights: return "figure.stairs"
         }
     }
 }
