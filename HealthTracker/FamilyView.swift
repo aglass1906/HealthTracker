@@ -146,7 +146,14 @@ class FamilyViewModel: ObservableObject {
                 .eq("id", value: userId)
                 .execute()
             
+
+            
             await fetchFamily()
+            
+            // Post to Feed
+            Task {
+                await SocialFeedManager.shared.post(type: .joined_family, familyId: family.id)
+            }
         } catch {
             errorMessage = "Invalid code or failed to join."
         }

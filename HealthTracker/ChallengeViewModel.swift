@@ -107,6 +107,17 @@ class ChallengeViewModel: ObservableObject {
             
             // Refresh list
             await fetchActiveChallenges(for: familyId)
+            
+            // Post to Feed
+            Task {
+                let payload: [String: String] = [
+                    "title": title,
+                    "metric": metric.displayName,
+                    "goal": "\(target) \(metric.unit)"
+                ]
+                await SocialFeedManager.shared.post(type: .challenge_created, familyId: familyId, payload: payload)
+            }
+            
             return true
         } catch {
             print("Create challenge error: \(error)")
@@ -210,7 +221,7 @@ class ChallengeViewModel: ObservableObject {
     
     // MARK: - Edit/Delete Challenge
     
-    func updateChallenge(challenge: Challenge, title: String, target: Int, startDate: Date, endDate: Date?) async -> Bool {
+    func updateChallenge(challenge: Challenge, title: String, target: Int, startDate: Date, endDate: Date?, notifyFeed: Bool) async -> Bool {
         guard let userId = AuthManager.shared.session?.user.id, userId == challenge.creator_id else { return false }
         
         struct ChallengeUpdate: Encodable {
@@ -240,6 +251,15 @@ class ChallengeViewModel: ObservableObject {
                 .update(updateData)
                 .eq("id", value: challenge.id)
                 .execute()
+            
+            if notifyFeed {
+                let payload: [String: String] = [
+                    "title": title,
+                    "metric": challenge.metric.displayName,
+                    "goal": "\(target) \(challenge.metric.unit)"
+                ]
+                await SocialFeedManager.shared.post(type: .challenge_updated, familyId: challenge.family_id, payload: payload)
+            }
             
             return true
         } catch {

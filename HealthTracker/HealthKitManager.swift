@@ -180,6 +180,42 @@ class HealthKitManager: ObservableObject {
         }
     }
     
+    func fetchTodayDistance() async throws -> Double {
+        guard let distanceType = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning) else {
+            throw HealthKitError.invalidType
+        }
+        
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: Date())
+        let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
+        
+        let predicate = HKQuery.predicateForSamples(
+            withStart: startOfDay,
+            end: endOfDay,
+            options: []
+        )
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKStatisticsQuery(
+                quantityType: distanceType,
+                quantitySamplePredicate: predicate,
+                options: .cumulativeSum
+            ) { _, result, error in
+                if let error = error {
+                    print("Distance fetch error (safe to ignore): \(error.localizedDescription)")
+                    continuation.resume(returning: 0)
+                    return
+                }
+                
+                // Return in meters
+                let distance = result?.sumQuantity()?.doubleValue(for: HKUnit.meter()) ?? 0
+                continuation.resume(returning: distance)
+            }
+            
+            healthStore.execute(query)
+        }
+    }
+    
     // MARK: - Activity Rings
     
     func fetchActivityRings(for date: Date = Date()) async throws -> ActivityRings {

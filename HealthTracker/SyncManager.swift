@@ -53,6 +53,22 @@ class SyncManager {
                 .upsert(uploadData, onConflict: "user_id, date")
                 .execute()
             print("Successfully synced data for \(dateString)")
+            
+            // Post "Goal Met" to feed if applicable
+            // 1. Need family_id. We accept a slight overhead of fetching profile here if not cached, 
+            // or we could cache it in SyncManager. For now, fetch is safer.
+            // But AuthManager has a helper now.
+            
+            if let profile = await authManager.fetchCurrentUserProfile(), let familyId = profile.family_id {
+                 SocialFeedManager.shared.checkAndPostGoal(
+                    steps: Int(data.steps),
+                    calories: Int(data.calories),
+                    flights: Int(data.flights),
+                    distance: data.distance ?? 0.0,
+                    familyId: familyId
+                 )
+            }
+            
         } catch {
             print("Failed to sync data: \(error)")
         }
@@ -86,6 +102,22 @@ class SyncManager {
             print("Successfully batch synced \(uploadList.count) days")
         } catch {
             print("Failed to batch sync: \(error)")
+        }
+    }
+    
+    func syncWorkouts(workouts: [WorkoutData]) async {
+        guard !workouts.isEmpty else { return }
+        
+        if let profile = await authManager.fetchCurrentUserProfile(), let familyId = profile.family_id {
+            for workout in workouts {
+                SocialFeedManager.shared.checkAndPostWorkout(workout: workout, familyId: familyId)
+            }
+        }
+    }
+    
+    func syncRings(rings: ActivityRings) async {
+        if let profile = await authManager.fetchCurrentUserProfile(), let familyId = profile.family_id {
+            SocialFeedManager.shared.checkAndPostRings(rings: rings, familyId: familyId)
         }
     }
 }

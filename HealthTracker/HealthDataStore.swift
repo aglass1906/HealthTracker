@@ -77,10 +77,11 @@ class HealthDataStore: ObservableObject {
             async let steps = healthKitManager.fetchTodaySteps()
             async let flights = healthKitManager.fetchTodayFlights()
             async let calories = healthKitManager.fetchTodayCalories()
+            async let distance = healthKitManager.fetchTodayDistance()
             async let workouts = healthKitManager.fetchTodayWorkouts()
             async let rings = healthKitManager.fetchActivityRings()
             
-            let (stepsValue, flightsValue, caloriesValue, workoutsValue, ringsValue) = try await (steps, flights, calories, workouts, rings)
+            let (stepsValue, flightsValue, caloriesValue, distanceValue, workoutsValue, ringsValue) = try await (steps, flights, calories, distance, workouts, rings)
             
             let today = Calendar.current.startOfDay(for: Date())
             let newData = DailyHealthData(
@@ -88,6 +89,7 @@ class HealthDataStore: ObservableObject {
                 steps: stepsValue,
                 flights: flightsValue,
                 calories: caloriesValue,
+                distance: distanceValue,
                 activityRings: ringsValue,
                 workouts: workoutsValue
             )
@@ -108,6 +110,8 @@ class HealthDataStore: ObservableObject {
             // Sync to Supabase
             Task {
                 await SyncManager.shared.uploadDailyStats(data: newData)
+                await SyncManager.shared.syncWorkouts(workouts: workoutsValue)
+                await SyncManager.shared.syncRings(rings: ringsValue)
             }
         } catch {
             print("Failed to fetch today's data: \(error)")

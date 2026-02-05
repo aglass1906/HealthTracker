@@ -14,7 +14,7 @@ struct SocialEvent: Codable, Identifiable {
     let family_id: UUID
     let user_id: UUID
     let type: String
-    // Payload as basic string/dict for now, or just ignore specific fields if untyped
+    let payload: [String: String]?
     let created_at: String // ISO string
     
     // Joined profile
@@ -45,6 +45,7 @@ class SocialFeedViewModel: ObservableObject {
                 let family_id: UUID
                 let user_id: UUID
                 let type: String
+                let payload: [String: String]?
                 let created_at: String
             }
             
@@ -65,6 +66,7 @@ class SocialFeedViewModel: ObservableObject {
                     family_id: event.family_id,
                     user_id: event.user_id,
                     type: event.type,
+                    payload: event.payload,
                     created_at: event.created_at,
                     profile: profile
                 )
@@ -118,6 +120,42 @@ struct SocialFeedView: View {
                                     
                                     Text(description(for: event))
                                         .font(.body)
+                                    
+                                    // Rich Payload Display
+                                    if let payload = event.payload, !payload.isEmpty {
+                                        if event.type == "challenge_created" || event.type == "challenge_updated" {
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                if let title = payload["title"] {
+                                                    Text(title)
+                                                        .font(.headline)
+                                                        .foregroundStyle(.primary)
+                                                }
+                                                if let goal = payload["goal"] {
+                                                    Text("Goal: \(goal)")
+                                                        .font(.caption)
+                                                        .foregroundStyle(.secondary)
+                                                }
+                                            }
+                                            .padding(8)
+                                            .background(Color.blue.opacity(0.1))
+                                            .cornerRadius(8)
+                                            .padding(.top, 4)
+                                        } else if event.type == "goal_met" {
+                                            HStack {
+                                                if let goalType = payload["goal"], let value = payload["value"] {
+                                                    Image(systemName: iconForGoal(goalType))
+                                                        .foregroundStyle(colorForGoal(goalType))
+                                                    Text("\(goalType): \(value)")
+                                                        .font(.subheadline)
+                                                        .fontWeight(.medium)
+                                                }
+                                            }
+                                            .padding(8)
+                                            .background(Color(.secondarySystemBackground))
+                                            .cornerRadius(8)
+                                            .padding(.top, 4)
+                                        }
+                                    }
                                 }
                                 Spacer()
                             }
@@ -140,9 +178,21 @@ struct SocialFeedView: View {
         case "workout_finished":
             return "finished a workout! 💪"
         case "goal_met":
-            return "hit their daily goal! 🎯"
+            return "hit a daily goal! 🎯"
         case "challenge_won":
             return "won a challenge! 🏆"
+        case "challenge_created":
+            return "created a new challenge! ⚔️"
+        case "challenge_updated":
+            return "updated the challenge details. 📝"
+        case "joined_family":
+            return "joined the family! 👋"
+        case "ring_closed_move":
+            return "closed their Move ring! 🔥"
+        case "ring_closed_exercise":
+            return "closed their Exercise ring! 🟢"
+        case "ring_closed_stand":
+            return "closed their Stand ring! 🔵"
         default:
             return "did something cool."
         }
@@ -158,5 +208,27 @@ struct SocialFeedView: View {
         if diff < 3600 { return "\(Int(diff / 60))m ago" }
         if diff < 86400 { return "\(Int(diff / 3600))h ago" }
         return "\(Int(diff / 86400))d ago"
+    }
+    
+    // MARK: - Helpers
+    
+    func iconForGoal(_ type: String) -> String {
+        switch type {
+        case "Steps": return "figure.walk"
+        case "Calories": return "flame.fill"
+        case "Flights": return "stairs"
+        case "Distance": return "map.fill"
+        default: return "star.fill"
+        }
+    }
+    
+    func colorForGoal(_ type: String) -> Color {
+        switch type {
+        case "Steps": return .blue
+        case "Calories": return .orange
+        case "Flights": return .purple
+        case "Distance": return .green
+        default: return .yellow
+        }
     }
 }

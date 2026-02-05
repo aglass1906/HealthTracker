@@ -66,15 +66,17 @@ struct DailyHealthData: Identifiable, Codable {
     let steps: Double
     let flights: Double
     let calories: Double
+    var distance: Double? // Added optional
     var activityRings: ActivityRings?
     var workouts: [WorkoutData]
     
-    init(date: Date, steps: Double, flights: Double, calories: Double, activityRings: ActivityRings? = nil, workouts: [WorkoutData] = []) {
+    init(date: Date, steps: Double, flights: Double, calories: Double, distance: Double? = nil, activityRings: ActivityRings? = nil, workouts: [WorkoutData] = []) {
         self.id = date.formatted(date: .numeric, time: .omitted)
         self.date = date
         self.steps = steps
         self.flights = flights
         self.calories = calories
+        self.distance = distance
         self.activityRings = activityRings
         self.workouts = workouts
     }

@@ -22,7 +22,7 @@ struct OnboardingView: View {
     var body: some View {
         ZStack {
             // Background Gradient
-            LinearGradient(colors: [Color.blue.opacity(0.1), Color.white], startPoint: .topLeading, endPoint: .bottomTrailing)
+            LinearGradient(colors: [Color.blue.opacity(0.1), Color(.systemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing)
                 .ignoresSafeArea()
             
             VStack {
@@ -290,7 +290,7 @@ struct FeatureRow: View {
             Spacer()
         }
         .padding()
-        .background(Color.white)
+        .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
     }

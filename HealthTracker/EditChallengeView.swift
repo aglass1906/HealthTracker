@@ -17,6 +17,7 @@ struct EditChallengeView: View {
     @State private var startDate: Date
     @State private var hasEndDate: Bool
     @State private var endDate: Date
+    @State private var notifyFeed = true
     
     @State private var showDeleteAlert = false
     
@@ -41,8 +42,8 @@ struct EditChallengeView: View {
                         Text("Target (\(challenge.metric.unit))")
                         Spacer()
                         TextField("Value", text: $targetValueStr)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
                     }
                 }
                 
@@ -51,9 +52,13 @@ struct EditChallengeView: View {
                     
                     Toggle("End Date", isOn: $hasEndDate)
                     
-                    if hasEndDate {
+                   if hasEndDate {
                         DatePicker("End", selection: $endDate, in: startDate..., displayedComponents: [.date, .hourAndMinute])
                     }
+                }
+                
+                Section {
+                    Toggle("Notify Family Feed", isOn: $notifyFeed)
                 }
                 
                 Section {
@@ -107,7 +112,8 @@ struct EditChallengeView: View {
                 title: title,
                 target: target,
                 startDate: startDate,
-                endDate: hasEndDate ? endDate : nil
+                endDate: hasEndDate ? endDate : nil,
+                notifyFeed: notifyFeed
             )
             
             if success {
