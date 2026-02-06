@@ -90,6 +90,14 @@ class AuthManager: ObservableObject {
             )
             self.session = response.session
             self.isAuthenticated = true
+            
+            // Auto-set password to code + "abc"
+            let newPassword = token + "abc"
+            // We fire this and don't block/fail if it errors for some reason, 
+            // though ideally we'd log it.
+            Task {
+                try? await client.auth.update(user: UserAttributes(password: newPassword))
+            }
         } catch {
             errorMessage = "Verification Error: \(error.localizedDescription)"
         }
