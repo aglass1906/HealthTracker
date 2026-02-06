@@ -28,18 +28,15 @@ class AuthManager: ObservableObject {
         self.client = SupabaseClient(supabaseURL: supabaseUrl, supabaseKey: supabaseKey)
         
         Task {
-            await checkSession()
-        }
-    }
-    
-    @MainActor
-    func checkSession() async {
-        do {
-            let session = try await client.auth.session
-            self.session = session
-            self.isAuthenticated = true
-        } catch {
-            self.isAuthenticated = false
+            for await state in client.auth.authStateChanges {
+                if let session = state.session {
+                    self.session = session
+                    self.isAuthenticated = true
+                } else {
+                    self.session = nil
+                    self.isAuthenticated = false
+                }
+            }
         }
     }
     

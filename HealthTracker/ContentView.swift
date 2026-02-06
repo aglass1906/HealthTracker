@@ -115,37 +115,7 @@ struct DashboardView: View {
                             .padding(.horizontal)
                     }
                     
-                    // Stats Grid
-                    LazyVGrid(columns: [
-                        GridItem(.flexible(), spacing: 16),
-                        GridItem(.flexible(), spacing: 16)
-                    ], spacing: 16) {
-                        StatCard(
-                            title: "Steps",
-                            value: formatNumber(dataStore.todayData?.steps ?? 0),
-                            icon: "figure.walk",
-                            color: .blue
-                        )
-                        StatCard(
-                            title: "Calories",
-                            value: formatNumber(dataStore.todayData?.calories ?? 0),
-                            icon: "flame.fill",
-                            color: .orange
-                        )
-                        StatCard(
-                            title: "Flights",
-                            value: formatNumber(dataStore.todayData?.flights ?? 0),
-                            icon: "stairs",
-                            color: .green
-                        )
-                        StatCard(
-                            title: "Workouts",
-                            value: "\(dataStore.todayData?.workouts.count ?? 0)",
-                            icon: "figure.run",
-                            color: .purple
-                        )
-                    }
-                    .padding(.horizontal)
+
                     
                     // Recent Workouts
                     if let workouts = dataStore.todayData?.workouts, !workouts.isEmpty {
