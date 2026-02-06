@@ -12,6 +12,7 @@ struct ChallengeDetailView: View {
     let challenge: Challenge
     @StateObject private var viewModel = ChallengeViewModel()
     @State private var showingEdit = false
+    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
         ScrollView {
@@ -35,6 +36,14 @@ struct ChallengeDetailView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(Color.orange.opacity(0.1))
+                            .cornerRadius(20)
+                    } else if challenge.type == .count {
+                        Text("Goal: Most \(challenge.metric.displayName)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.purple.opacity(0.1))
                             .cornerRadius(20)
                     } else {
                         Text("Goal: \(challenge.target_value) \(challenge.metric.unit)")
@@ -98,7 +107,9 @@ struct ChallengeDetailView: View {
         .sheet(isPresented: $showingEdit, onDismiss: {
             Task { await viewModel.loadProgress(for: challenge) }
         }) {
-            EditChallengeView(challenge: challenge, viewModel: viewModel)
+            EditChallengeView(challenge: challenge, viewModel: viewModel, onDeleteSuccess: {
+                dismiss()
+            })
         }
         .task {
             await viewModel.loadProgress(for: challenge)
@@ -137,6 +148,10 @@ struct ParticipantRow: View {
                         Text("\(Int(participant.value)) Day Streak")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                    } else if type == .count {
+                        Text("\(Int(participant.value)) \(metric.unit)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     } else {
                         Text("\(Int(participant.value)) / \(Int(target))")
                             .font(.caption)
@@ -146,9 +161,11 @@ struct ParticipantRow: View {
                 
                 Spacer()
                 
-                Text("\(Int(participant.progress * 100))%")
-                    .font(.headline)
-                    .foregroundStyle(participant.progress >= 1.0 ? .green : .blue)
+                if type != .count {
+                    Text("\(Int(participant.progress * 100))%")
+                        .font(.headline)
+                        .foregroundStyle(participant.progress >= 1.0 ? .green : .blue)
+                }
             }
             
             // Progress Bar

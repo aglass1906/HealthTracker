@@ -13,7 +13,7 @@ struct ChallengeParticipant: Identifiable {
     let id: UUID // user_id
     let profile: Profile
     let value: Double // aggregated value (steps, calories, etc)
-    let progress: Double // 0.0 to 1.0
+    var progress: Double // 0.0 to 1.0
     var rank: Int = 0
 }
 
@@ -24,7 +24,8 @@ struct DailyStatDB: Codable {
     let calories: Int
     let flights: Int
     let distance: Double
-    let duration: Double? // workout minutes if we add column, for now we might need to assume it's NOT in daily_stats table yet based on previous file reads
+    let workouts_count: Int? 
+    let exercise_minutes: Int?
 }
 
 class ChallengeViewModel: ObservableObject {
@@ -110,10 +111,19 @@ class ChallengeViewModel: ObservableObject {
             
             // Post to Feed
             Task {
+                var goalText = "\(target) \(metric.unit)"
+                if type == .count {
+                    if let endDate = endDate {
+                        goalText = "Most \(metric.displayName) by \(endDate.formatted(date: .abbreviated, time: .omitted))"
+                    } else {
+                        goalText = "Most \(metric.displayName)"
+                    }
+                }
+                
                 let payload: [String: String] = [
                     "title": title,
                     "metric": metric.displayName,
-                    "goal": "\(target) \(metric.unit)"
+                    "goal": goalText
                 ]
                 await SocialFeedManager.shared.post(type: .challenge_created, familyId: familyId, payload: payload)
             }
@@ -186,13 +196,24 @@ class ChallengeViewModel: ObservableObject {
                 case .distance:
                     totalValue = userStats.reduce(0) { $0 + $1.distance }
                 case .exercise_minutes:
-                     // Fallback if column missing or logic TODO
-                    totalValue = 0 
+                    let totalInt = userStats.reduce(into: 0) { $0 += ($1.exercise_minutes ?? 0) }
+                    totalValue = Double(totalInt)
                 case .flights:
                     totalValue = Double(userStats.reduce(0) { $0 + $1.flights })
+                case .workouts:
+                    let totalInt = userStats.reduce(into: 0) { $0 += ($1.workouts_count ?? 0) }
+                    totalValue = Double(totalInt)
                 }
                 
-                let progress = totalValue / Double(challenge.target_value)
+                let progress: Double
+                
+                if challenge.type == .count {
+                    // For count/leaderboard, progress is relative to the LEADER (max value), 
+                    // calculated after we have all values.
+                    progress = 0 // Placeholder
+                } else {
+                    progress = totalValue / Double(challenge.target_value)
+                }
                 
                 tempParticipants.append(ChallengeParticipant(
                     id: profile.id,
@@ -205,9 +226,22 @@ class ChallengeViewModel: ObservableObject {
             // 4. Rank
             tempParticipants.sort { $0.value > $1.value }
             
-            // Assign ranks
+            // Assign ranks & Fix Progress for .count
+            let maxValue = tempParticipants.first?.value ?? 1
+            
             for i in 0..<tempParticipants.count {
                 tempParticipants[i].rank = i + 1
+                
+                if challenge.type == .count {
+                    if maxValue > 0 {
+                        tempParticipants[i].progress = tempParticipants[i].value / maxValue
+                    } else {
+                        tempParticipants[i].progress = 0
+                    }
+                }
+                
+                // For other types, we might want to cap at 1.0 or let it go over?
+                // Typically progress bars clamp to 1.0 visually, but data can be > 1.0
             }
             
             self.participants = tempParticipants
@@ -253,10 +287,19 @@ class ChallengeViewModel: ObservableObject {
                 .execute()
             
             if notifyFeed {
+                var goalText = "\(target) \(challenge.metric.unit)"
+                if challenge.type == .count {
+                    if let endDate = endDate {
+                        goalText = "Most \(challenge.metric.displayName) by \(endDate.formatted(date: .abbreviated, time: .omitted))"
+                    } else {
+                        goalText = "Most \(challenge.metric.displayName)"
+                    }
+                }
+                
                 let payload: [String: String] = [
                     "title": title,
                     "metric": challenge.metric.displayName,
-                    "goal": "\(target) \(challenge.metric.unit)"
+                    "goal": goalText
                 ]
                 await SocialFeedManager.shared.post(type: .challenge_updated, familyId: challenge.family_id, payload: payload)
             }

@@ -18,7 +18,7 @@ struct CreateChallengeView: View {
     @State private var startDate = Date()
     @State private var hasEndDate = false
     @State private var endDate = Date()
-    @State private var type: ChallengeType = .race
+    @State private var type: ChallengeType = .count
     
     var body: some View {
         NavigationStack {
@@ -40,23 +40,30 @@ struct CreateChallengeView: View {
                         }
                     }
                     
-                    HStack {
-                        Text("Target")
-                        TextField("Value", text: $targetValueStr)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                        Text(selectedMetric.unit)
-                            .foregroundStyle(.secondary)
+                    if type != .count {
+                        HStack {
+                            Text("Target")
+                            TextField("Value", text: $targetValueStr)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                            Text(selectedMetric.unit)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 
                 Section("Timeline") {
                     DatePicker("Start Date", selection: $startDate, displayedComponents: [.date, .hourAndMinute])
                     
-                    Toggle("Set End Date", isOn: $hasEndDate)
-                    
-                    if hasEndDate {
+                    if type == .count {
+                        // Leaderboards must have an end date to define the winner
                         DatePicker("End Date", selection: $endDate, in: startDate..., displayedComponents: [.date, .hourAndMinute])
+                    } else {
+                        Toggle("Set End Date", isOn: $hasEndDate)
+                        
+                        if hasEndDate {
+                            DatePicker("End Date", selection: $endDate, in: startDate..., displayedComponents: [.date, .hourAndMinute])
+                        }
                     }
                 }
                 
@@ -72,7 +79,7 @@ struct CreateChallengeView: View {
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    .disabled(title.isEmpty || targetValueStr.isEmpty)
+                    .disabled(title.isEmpty || (type != .count && targetValueStr.isEmpty))
                 }
             }
             .navigationTitle("New Challenge")
@@ -86,7 +93,12 @@ struct CreateChallengeView: View {
     }
     
     private func create() {
-        guard let target = Int(targetValueStr) else { return }
+        // For leaderboard, target is 0/ignored. For others, must be valid Int.
+        var target = 0
+        if type != .count {
+            guard let val = Int(targetValueStr) else { return }
+            target = val
+        }
         
         Task {
             let success = await viewModel.createChallenge(
@@ -96,7 +108,7 @@ struct CreateChallengeView: View {
                 metric: selectedMetric,
                 target: target,
                 startDate: startDate,
-                endDate: hasEndDate ? endDate : nil
+                endDate: (hasEndDate || type == .count) ? endDate : nil // Force end date for count
             )
             
             if success {

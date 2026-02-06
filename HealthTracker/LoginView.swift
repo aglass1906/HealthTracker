@@ -27,7 +27,7 @@ struct LoginView: View {
             VStack(spacing: 24) {
                 // Header
                 VStack(spacing: 12) {
-                    Image(systemName: "figure.social.dance")
+                    Image(systemName: "person.3.fill")
                         .font(.system(size: 80))
                         .foregroundStyle(.blue)
                     

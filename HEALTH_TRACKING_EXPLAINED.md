@@ -22,3 +22,11 @@ Once Apple Health gives us those numbers, we save a copy of them inside the **He
 ### 4. The Cloud Sync (Sharing)
 This is the "Family" feature:
 Immediately after we get the fresh numbers from Apple, we securely send a copy of **just those daily totals** to our backend (Supabase). This is how your family members can see your score on the leaderboard without needing access to your phone!
+
+### 5. Workout Tracking Specifics
+For **Workouts** specifically, we do a little extra math before syncing:
+*   **Fetch**: We retrieve the list of workout sessions for the day from Apple Health.
+*   **Calculate**: We rely on two derived numbers:
+    *   **Workout Count**: The simple number of sessions (e.g., 2 workouts).
+    *   **Exercise Minutes**: The sum of the duration of all those sessions.
+*   **Sync**: These calculated totals are sent to the cloud alongside your steps and calories, allowing us to run challenges based on "Number of Workouts"!

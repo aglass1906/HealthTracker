@@ -15,6 +15,8 @@ struct DailyStatUpload: Codable {
     let calories: Int
     let flights: Int
     let distance: Double
+    let workouts_count: Int
+    let exercise_minutes: Int
 }
 
 class SyncManager {
@@ -37,14 +39,18 @@ class SyncManager {
         formatter.dateFormat = "yyyy-MM-dd"
         let dateString = formatter.string(from: data.date)
         
+        // Calculate exercise minutes from workout durations
+        let totalMinutes = Int(data.workouts.reduce(0) { $0 + $1.duration } / 60)
+        
         let uploadData = DailyStatUpload(
             user_id: userId,
             date: dateString,
             steps: Int(data.steps),
             calories: Int(data.calories),
             flights: Int(data.flights),
-            // Assuming we might add distance to DailyHealthData later, using 0 for now or calculating it if redundant
-            distance: 0.0 
+            distance: data.distance ?? 0.0,
+            workouts_count: data.workouts.count,
+            exercise_minutes: totalMinutes
         )
         
         do {
@@ -55,18 +61,19 @@ class SyncManager {
             print("Successfully synced data for \(dateString)")
             
             // Post "Goal Met" to feed if applicable
-            // 1. Need family_id. We accept a slight overhead of fetching profile here if not cached, 
-            // or we could cache it in SyncManager. For now, fetch is safer.
-            // But AuthManager has a helper now.
-            
             if let profile = await authManager.fetchCurrentUserProfile(), let familyId = profile.family_id {
                  SocialFeedManager.shared.checkAndPostGoal(
                     steps: Int(data.steps),
                     calories: Int(data.calories),
                     flights: Int(data.flights),
                     distance: data.distance ?? 0.0,
+                    exerciseMinutes: totalMinutes,
+                    workoutsCount: data.workouts.count,
                     familyId: familyId
                  )
+                 
+                 // Also could post checkAndPostWorkout loop here, but SyncManager calls syncWorkouts separately typically.
+                 // We will stick to the existing separate syncWorkouts calls.
             }
             
         } catch {
@@ -81,14 +88,17 @@ class SyncManager {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         
-        let uploadList = dataList.map { data in
-            DailyStatUpload(
+        let uploadList = dataList.map { data -> DailyStatUpload in
+            let totalMinutes = Int(data.workouts.reduce(0) { $0 + $1.duration } / 60)
+             return DailyStatUpload(
                 user_id: userId,
                 date: formatter.string(from: data.date),
                 steps: Int(data.steps),
                 calories: Int(data.calories),
                 flights: Int(data.flights),
-                distance: 0.0
+                distance: data.distance ?? 0.0,
+                workouts_count: data.workouts.count,
+                exercise_minutes: totalMinutes
             )
         }
         

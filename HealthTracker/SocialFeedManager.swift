@@ -61,7 +61,7 @@ class SocialFeedManager {
     
     // MARK: - Goal Checks (Prevent Duplicates)
     
-    func checkAndPostGoal(steps: Int, calories: Int, flights: Int, distance: Double, familyId: UUID) {
+    func checkAndPostGoal(steps: Int, calories: Int, flights: Int, distance: Double, exerciseMinutes: Int, workoutsCount: Int, familyId: UUID) {
         let today = Date().formatted(date: .numeric, time: .omitted)
         
         func check(type: String, value: Double, threshold: Double, unit: String, displayValue: String) {
@@ -85,6 +85,8 @@ class SocialFeedManager {
         check(type: "Calories", value: Double(calories), threshold: 600, unit: "kcal", displayValue: "\(calories) kcal")
         check(type: "Flights", value: Double(flights), threshold: 10, unit: "floors", displayValue: "\(flights) floors")
         check(type: "Distance", value: distance, threshold: 8000, unit: "m", displayValue: String(format: "%.1f km", distance / 1000))
+        check(type: "Exercise Minutes", value: Double(exerciseMinutes), threshold: 30, unit: "mins", displayValue: "\(exerciseMinutes) mins")
+        check(type: "Workouts", value: Double(workoutsCount), threshold: 1, unit: "workouts", displayValue: "\(workoutsCount) workouts")
     }
     
     // MARK: - Ring Checks

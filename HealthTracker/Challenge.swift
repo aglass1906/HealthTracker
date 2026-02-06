@@ -53,11 +53,13 @@ struct Challenge: Identifiable, Codable {
 enum ChallengeType: String, Codable, CaseIterable {
     case race      // First to X
     case streak    // Daily Goal Streak
+    case count     // Most X by End Date
     
     var icon: String {
         switch self {
         case .race: return "flag.checkered"
         case .streak: return "flame.fill"
+        case .count: return "chart.bar.fill"
         }
     }
     
@@ -65,6 +67,7 @@ enum ChallengeType: String, Codable, CaseIterable {
         switch self {
         case .race: return "Race"
         case .streak: return "Streak"
+        case .count: return "Leaderboard"
         }
     }
 }
@@ -75,14 +78,16 @@ enum ChallengeMetric: String, Codable, CaseIterable {
     case distance
     case exercise_minutes
     case flights
+    case workouts
     
     var displayName: String {
         switch self {
         case .steps: return "Steps"
         case .calories: return "Calories"
-        case .distance: return "Distance (mi)"
-        case .exercise_minutes: return "Exercise (min)"
-        case .flights: return "Stairs"
+        case .distance: return "Distance"
+        case .exercise_minutes: return "Exercise Minutes"
+        case .flights: return "Flights"
+        case .workouts: return "Workouts"
         }
     }
     
@@ -90,19 +95,21 @@ enum ChallengeMetric: String, Codable, CaseIterable {
         switch self {
         case .steps: return "steps"
         case .calories: return "kcal"
-        case .distance: return "miles"
+        case .distance: return "km"
         case .exercise_minutes: return "mins"
-        case .flights: return "flights"
+        case .flights: return "floors"
+        case .workouts: return "workouts"
         }
     }
     
     var icon: String {
         switch self {
         case .steps: return "figure.walk"
-        case .calories: return "flame"
-        case .distance: return "map"
-        case .exercise_minutes: return "figure.run"
-        case .flights: return "figure.stairs"
+        case .calories: return "flame.fill"
+        case .distance: return "figure.run"
+        case .exercise_minutes: return "clock.fill"
+        case .flights: return "stairs"
+        case .workouts: return "dumbbell.fill"
         }
     }
 }

@@ -21,9 +21,12 @@ struct EditChallengeView: View {
     
     @State private var showDeleteAlert = false
     
-    init(challenge: Challenge, viewModel: ChallengeViewModel) {
+    var onDeleteSuccess: (() -> Void)?
+    
+    init(challenge: Challenge, viewModel: ChallengeViewModel, onDeleteSuccess: (() -> Void)? = nil) {
         self.challenge = challenge
         self.viewModel = viewModel
+        self.onDeleteSuccess = onDeleteSuccess
         
         _title = State(initialValue: challenge.title)
         _targetValueStr = State(initialValue: String(challenge.target_value))
@@ -52,7 +55,7 @@ struct EditChallengeView: View {
                     
                     Toggle("End Date", isOn: $hasEndDate)
                     
-                   if hasEndDate {
+                    if hasEndDate {
                         DatePicker("End", selection: $endDate, in: startDate..., displayedComponents: [.date, .hourAndMinute])
                     }
                 }
@@ -126,9 +129,8 @@ struct EditChallengeView: View {
         Task {
             let success = await viewModel.deleteChallenge(challengeId: challenge.id)
             if success {
+                onDeleteSuccess?()
                 dismiss() // Dimiss Edit View
-                // Note: The DetailView will likely need to pop too, handled by parent/env usually or state observation
-                // In iOS 16+ NavigationStack, deleting the item usually pops the detail view if logic is sound.
             }
         }
     }
