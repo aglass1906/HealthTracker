@@ -86,6 +86,7 @@ struct OnboardingView: View {
 struct IdentityStep: View {
     @Binding var displayName: String
     var onNext: () -> Void
+    @FocusState private var isFocused: Bool
     
     var body: some View {
         VStack(spacing: 30) {
@@ -95,6 +96,7 @@ struct IdentityStep: View {
                 .font(.system(size: 100))
                 .foregroundStyle(.blue)
                 .symbolEffect(.bounce, value: true)
+                .onTapGesture { isFocused = false }
             
             VStack(spacing: 12) {
                 Text("Who are you?")
@@ -107,6 +109,7 @@ struct IdentityStep: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal)
             }
+            .onTapGesture { isFocused = false }
             
             TextField("e.g. Dad, IronMan, Sarah", text: $displayName)
                 .font(.title2)
@@ -115,14 +118,18 @@ struct IdentityStep: View {
                 .cornerRadius(16)
                 .padding(.horizontal, 32)
                 .multilineTextAlignment(.center)
-                .submitLabel(.next)
+                .focused($isFocused)
+                .submitLabel(.done)
                 .onSubmit {
-                    if !displayName.isEmpty { onNext() }
+                    isFocused = false
                 }
             
             Spacer()
             
-            Button(action: onNext) {
+            Button(action: {
+                isFocused = false
+                onNext()
+            }) {
                 Text("Continue")
                     .font(.headline)
                     .foregroundColor(.white)
@@ -134,6 +141,10 @@ struct IdentityStep: View {
             .disabled(displayName.isEmpty)
             .padding(.horizontal, 32)
             .padding(.bottom, 50)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isFocused = false
         }
     }
 }
