@@ -147,3 +147,13 @@ extension HKWorkoutActivityType {
     }
 }
 
+struct DailyHealthGoals {
+    static let steps = 10_000
+    static let calories = 600
+    static let flights = 10
+    static let distance = 8000.0 // meters
+    static let exerciseMinutes = 30
+    static let workouts = 1
+}
+
+

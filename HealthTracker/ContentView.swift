@@ -110,6 +110,9 @@ struct DashboardView: View {
                     if let rings = dataStore.todayData?.activityRings {
                         ActivityRingsView(rings: rings)
                             .padding(.horizontal)
+                        
+                        DailyGoalsCard(data: dataStore.todayData)
+                            .padding(.horizontal)
                     }
                     
                     // Stats Grid
@@ -1242,6 +1245,140 @@ struct AuthorizationView: View {
                     }
                 }
             }
+        }
+    }
+}
+
+
+struct DailyGoalsCard: View {
+    let data: DailyHealthData?
+    
+    var exerciseMinutes: Int {
+        guard let workouts = data?.workouts else { return 0 }
+        return Int(workouts.reduce(0) { $0 + $1.duration } / 60)
+    }
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Daily Activities")
+                .font(.title2)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            VStack(spacing: 16) {
+                GoalRow(
+                    title: "Steps",
+                    icon: "figure.walk",
+                    color: .blue,
+                    current: data?.steps ?? 0,
+                    target: Double(DailyHealthGoals.steps),
+                    unit: "steps"
+                )
+                
+                GoalRow(
+                    title: "Calories",
+                    icon: "flame.fill",
+                    color: .orange,
+                    current: data?.calories ?? 0,
+                    target: Double(DailyHealthGoals.calories),
+                    unit: "kcal"
+                )
+                
+                GoalRow(
+                    title: "Distance",
+                    icon: "map.fill",
+                    color: .cyan,
+                    current: (data?.distance ?? 0) / 1000,
+                    target: Double(DailyHealthGoals.distance) / 1000,
+                    unit: "km",
+                    format: "%.1f"
+                )
+                
+                GoalRow(
+                    title: "Flights",
+                    icon: "stairs",
+                    color: .green,
+                    current: data?.flights ?? 0,
+                    target: Double(DailyHealthGoals.flights),
+                    unit: "floors"
+                )
+                
+                GoalRow(
+                    title: "Exercise",
+                    icon: "figure.run",
+                    color: .purple,
+                    current: Double(exerciseMinutes),
+                    target: Double(DailyHealthGoals.exerciseMinutes),
+                    unit: "min"
+                )
+                
+                GoalRow(
+                    title: "Workouts",
+                    icon: "dumbbell.fill",
+                    color: .indigo,
+                    current: Double(data?.workouts.count ?? 0),
+                    target: Double(DailyHealthGoals.workouts),
+                    unit: "workouts",
+                    format: "%.0f"
+                )
+            }
+        }
+        .padding()
+        .background {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        }
+    }
+}
+
+struct GoalRow: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let current: Double
+    let target: Double
+    let unit: String
+    var format: String = "%.0f"
+    
+    var progress: Double {
+        if target > 0 {
+            return min(max(current / target, 0), 1.0)
+        }
+        return 0
+    }
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Label {
+                    Text(title)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                } icon: {
+                    Image(systemName: icon)
+                        .foregroundStyle(color)
+                }
+                
+                Spacer()
+                
+                Text("\(String(format: format, current)) / \(String(format: format, target)) \(unit)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color(.secondarySystemBackground))
+                        .frame(height: 8)
+                    
+                    Capsule()
+                        .fill(color)
+                        .frame(width: max(geometry.size.width * progress, 0), height: 8)
+                }
+            }
+            .frame(height: 8)
         }
     }
 }
