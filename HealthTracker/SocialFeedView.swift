@@ -150,8 +150,52 @@ struct SocialFeedView: View {
                                                         .fontWeight(.medium)
                                                 }
                                             }
-                                            .padding(8)
+                                             .padding(8)
                                             .background(Color(.secondarySystemBackground))
+                                            .cornerRadius(8)
+                                            .padding(.top, 4)
+                                        } else if event.type == "round_winner" {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                if let challengeTitle = payload["challenge_title"] {
+                                                    HStack {
+                                                        Image(systemName: "trophy.fill")
+                                                            .foregroundStyle(.yellow)
+                                                        Text(challengeTitle)
+                                                            .font(.headline)
+                                                            .foregroundStyle(.primary)
+                                                    }
+                                                }
+                                                if let roundNumber = payload["round_number"] {
+                                                    Text("Round \(roundNumber) Winner")
+                                                        .font(.subheadline)
+                                                        .fontWeight(.semibold)
+                                                        .foregroundStyle(.yellow)
+                                                }
+                                            }
+                                            .padding(8)
+                                            .background(Color.yellow.opacity(0.1))
+                                            .cornerRadius(8)
+                                            .padding(.top, 4)
+                                        } else if event.type == "challenge_won" {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                if let challengeTitle = payload["challenge_title"] {
+                                                    HStack {
+                                                        Image(systemName: "trophy.fill")
+                                                            .foregroundStyle(.yellow)
+                                                        Text(challengeTitle)
+                                                            .font(.headline)
+                                                            .foregroundStyle(.primary)
+                                                    }
+                                                }
+                                                if let metric = payload["metric"], let value = payload["value"] {
+                                                    Text("\(value) \(metric)")
+                                                        .font(.subheadline)
+                                                        .fontWeight(.semibold)
+                                                        .foregroundStyle(.yellow)
+                                                }
+                                            }
+                                            .padding(8)
+                                            .background(Color.yellow.opacity(0.15))
                                             .cornerRadius(8)
                                             .padding(.top, 4)
                                         }
@@ -180,6 +224,9 @@ struct SocialFeedView: View {
         case "goal_met":
             return "hit a daily goal! 🎯"
         case "challenge_won":
+            if let challengeTitle = event.payload?["challenge_title"] {
+                return "won \(challengeTitle)! 🏆"
+            }
             return "won a challenge! 🏆"
         case "challenge_created":
             return "created a new challenge! ⚔️"
@@ -193,6 +240,8 @@ struct SocialFeedView: View {
             return "closed their Exercise ring! 🟢"
         case "ring_closed_stand":
             return "closed their Stand ring! 🔵"
+        case "round_winner":
+            return "won a challenge round! 🏆"
         default:
             return "did something cool."
         }

@@ -57,6 +57,12 @@ struct Challenge: Identifiable, Codable {
     var isActive: Bool {
         return status == .active
     }
+    
+    // Helper to check if ended
+    var isEnded: Bool {
+        guard let endDate = end_date else { return false }
+        return Date() > endDate
+    }
 }
 
 enum ChallengeType: String, Codable, CaseIterable {

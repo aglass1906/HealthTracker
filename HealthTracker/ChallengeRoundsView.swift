@@ -127,12 +127,14 @@ struct ChallengeRoundsView: View {
             .padding(.vertical)
         }
         .task {
+            await viewModel.refreshRoundStatuses(for: challenge)
             await viewModel.loadRounds(for: challenge)
             if let activeRound = viewModel.rounds.first(where: { $0.status == "active" }) {
                 await viewModel.loadRoundParticipants(for: activeRound)
             }
         }
         .refreshable {
+            await viewModel.refreshRoundStatuses(for: challenge)
             await viewModel.loadRounds(for: challenge)
             if let activeRound = viewModel.rounds.first(where: { $0.status == "active" }) {
                 await viewModel.loadRoundParticipants(for: activeRound)
