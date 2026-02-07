@@ -21,6 +21,7 @@ class SocialFeedManager {
         case challenge_created
         case challenge_updated // Added
         case challenge_won
+        case round_winner
         case goal_met
         case workout_finished
         case ring_closed_move
@@ -125,5 +126,17 @@ class SocialFeedManager {
             await post(type: .workout_finished, familyId: familyId)
             UserDefaults.standard.set(true, forKey: key)
         }
+    }
+    
+    // MARK: - Round Winner
+    
+    func postRoundWinner(challengeTitle: String, roundNumber: Int, winnerName: String, familyId: UUID) async {
+        let payload: [String: String] = [
+            "challenge_title": challengeTitle,
+            "round_number": "\(roundNumber)",
+            "winner_name": winnerName
+        ]
+        
+        await post(type: .round_winner, familyId: familyId, payload: payload)
     }
 }

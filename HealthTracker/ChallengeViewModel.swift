@@ -34,6 +34,9 @@ class ChallengeViewModel: ObservableObject {
     @Published var creatorName: String?
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var rounds: [ChallengeRound] = []
+    @Published var currentRoundParticipants: [RoundParticipant] = []
+    @Published var roundWinCounts: [UUID: Int] = [:] // user_id -> win count
     
     let client = AuthManager.shared.client
     
@@ -63,7 +66,7 @@ class ChallengeViewModel: ObservableObject {
     
     // MARK: - Create Challenge
     
-    func createChallenge(familyId: UUID, title: String, type: ChallengeType, metric: ChallengeMetric, target: Int, startDate: Date, endDate: Date?) async -> Bool {
+    func createChallenge(familyId: UUID, title: String, type: ChallengeType, metric: ChallengeMetric, target: Int, startDate: Date, endDate: Date?, roundDuration: RoundDuration? = nil) async -> Bool {
         guard let userId = AuthManager.shared.session?.user.id else { return false }
         
         // Supabase requires dates in ISO8601 string or Date object depending on SDK
@@ -79,7 +82,10 @@ class ChallengeViewModel: ObservableObject {
             let start_date: String
             let end_date: String?
             let status: ChallengeStatus
+            let round_duration: String?
+            let current_round_number: Int?
         }
+        
         
         // Format dates to ISO8601
         let formatter = ISO8601DateFormatter()
@@ -97,14 +103,46 @@ class ChallengeViewModel: ObservableObject {
             target_value: target,
             start_date: startString,
             end_date: endString,
-            status: .active
+            status: .active,
+            round_duration: roundDuration?.rawValue,
+            current_round_number: roundDuration != nil ? 1 : nil
         )
         
         do {
-            try await client
+            let createdChallenges: [Challenge] = try await client
                 .from("challenges")
                 .insert(newChallenge)
+                .select()
                 .execute()
+                .value
+            
+            // If rounds enabled, create first round
+            if let roundDur = roundDuration, let challenge = createdChallenges.first {
+                let calendar = Calendar.current
+                var firstRoundEnd: Date
+                
+                switch roundDur {
+                case .daily:
+                    firstRoundEnd = calendar.date(byAdding: .day, value: 1, to: startDate)!
+                case .weekly:
+                    firstRoundEnd = calendar.date(byAdding: .weekOfYear, value: 1, to: startDate)!
+                case .monthly:
+                    firstRoundEnd = calendar.date(byAdding: .month, value: 1, to: startDate)!
+                }
+                
+                let firstRound = ChallengeRoundInsert(
+                    challenge_id: challenge.id,
+                    round_number: 1,
+                    start_date: startString,
+                    end_date: formatter.string(from: firstRoundEnd),
+                    status: "active"
+                )
+                
+                try await client
+                    .from("challenge_rounds")
+                    .insert(firstRound)
+                    .execute()
+            }
             
             // Refresh list
             await fetchActiveChallenges(for: familyId)
@@ -327,4 +365,252 @@ class ChallengeViewModel: ObservableObject {
             return false
         }
     }
+    
+    // MARK: - Round Management
+    
+    func loadRounds(for challenge: Challenge) async {
+        guard challenge.round_duration != nil else { return }
+        
+        isLoading = true
+        rounds = []
+        roundWinCounts = [:]
+        
+        do {
+            let fetchedRounds: [ChallengeRound] = try await client
+                .from("challenge_rounds")
+                .select()
+                .eq("challenge_id", value: challenge.id)
+                .order("round_number")
+                .execute()
+                .value
+            
+            rounds = fetchedRounds
+            
+            // Calculate win counts
+            var winCounts: [UUID: Int] = [:]
+            for round in fetchedRounds {
+                if round.status == "completed", let winnerId = round.winner_id {
+                    winCounts[winnerId, default: 0] += 1
+                }
+            }
+            roundWinCounts = winCounts
+            
+        } catch {
+            print("Load rounds error: \(error)")
+        }
+        
+        isLoading = false
+    }
+    
+    func loadRoundParticipants(for round: ChallengeRound) async {
+        isLoading = true
+        currentRoundParticipants = []
+        
+        do {
+            let participants: [RoundParticipant] = try await client
+                .from("round_participants")
+                .select()
+                .eq("round_id", value: round.id)
+                .order("rank")
+                .execute()
+                .value
+            
+            currentRoundParticipants = participants
+            
+        } catch {
+            print("Load round participants error: \(error)")
+        }
+        
+        isLoading = false
+    }
+    
+    func calculateRoundWinner(for challenge: Challenge, round: ChallengeRound) async {
+        guard let duration = challenge.roundDuration else { return }
+        
+        do {
+            // 1. Get profiles
+            let profiles: [Profile] = try await client
+                .from("profiles")
+                .select()
+                .eq("family_id", value: challenge.family_id)
+                .execute()
+                .value
+            
+            let userIds = profiles.map { $0.id }
+            
+            // 2. Aggregate stats for the round date range
+            let formatter = ISO8601DateFormatter()
+            let startString = formatter.string(from: round.start_date)
+            let endString = formatter.string(from: round.end_date)
+            
+            let stats: [DailyStatDB] = try await client
+                .from("daily_stats")
+                .select()
+                .in("user_id", values: userIds)
+                .gte("date", value: startString)
+                .lte("date", value: endString)
+                .execute()
+                .value
+            
+            // 3. Calculate values
+            var participantValues: [(userId: UUID, value: Double)] = []
+            
+            for profile in profiles {
+                let userStats = stats.filter { $0.user_id == profile.id }
+                
+                var totalValue: Double = 0
+                switch challenge.metric {
+                case .steps:
+                    totalValue = Double(userStats.reduce(0) { $0 + $1.steps })
+                case .calories:
+                    totalValue = Double(userStats.reduce(0) { $0 + $1.calories })
+                case .flights:
+                    totalValue = Double(userStats.reduce(0) { $0 + $1.flights })
+                case .distance:
+                    totalValue = userStats.reduce(0) { $0 + $1.distance }
+                case .exercise_minutes:
+                    let totalInt = userStats.reduce(into: 0) { $0 += ($1.exercise_minutes ?? 0) }
+                    totalValue = Double(totalInt)
+                case .workouts:
+                    let totalInt = userStats.reduce(into: 0) { $0 += ($1.workouts_count ?? 0) }
+                    totalValue = Double(totalInt)
+                }
+                
+                participantValues.append((userId: profile.id, value: totalValue))
+            }
+            
+            // 4. Sort and rank
+            participantValues.sort { $0.value > $1.value }
+            
+            // 5. Insert round_participants
+            for (index, participant) in participantValues.enumerated() {
+                let roundParticipant = RoundParticipantInsert(
+                    round_id: round.id,
+                    user_id: participant.userId,
+                    value: participant.value,
+                    rank: index + 1
+                )
+                
+                try await client
+                    .from("round_participants")
+                    .upsert(roundParticipant)
+                    .execute()
+            }
+            
+            // 6. Determine winner(s) - all with max value
+            guard let maxValue = participantValues.first?.value, maxValue > 0 else { return }
+            let winners = participantValues.filter { $0.value == maxValue }
+            
+            // For now, set winner_id to first winner (or handle multiple winners differently)
+            if let firstWinner = winners.first {
+                try await client
+                    .from("challenge_rounds")
+                    .update(["winner_id": firstWinner.userId.uuidString, "status": "completed"])
+                    .eq("id", value: round.id)
+                    .execute()
+                
+                // Post to feed for each winner
+                for winner in winners {
+                    if let winnerProfile = profiles.first(where: { $0.id == winner.userId }) {
+                        await SocialFeedManager.shared.postRoundWinner(
+                            challengeTitle: challenge.title,
+                            roundNumber: round.round_number,
+                            winnerName: winnerProfile.display_name ?? "Unknown",
+                            familyId: challenge.family_id
+                        )
+                    }
+                }
+            }
+            
+        } catch {
+            print("Calculate round winner error: \(error)")
+        }
+    }
+    
+    func advanceToNextRound(for challenge: Challenge) async -> Bool {
+        guard let duration = challenge.roundDuration,
+              let currentRoundNum = challenge.current_round_number else {
+            return false
+        }
+        
+        do {
+            let calendar = Calendar.current
+            
+            // Get current round
+            let currentRounds: [ChallengeRound] = try await client
+                .from("challenge_rounds")
+                .select()
+                .eq("challenge_id", value: challenge.id)
+                .eq("round_number", value: currentRoundNum)
+                .execute()
+                .value
+            
+            guard let currentRound = currentRounds.first else { return false }
+            
+            // Calculate winner for current round
+            await calculateRoundWinner(for: challenge, round: currentRound)
+            
+            // Calculate next round dates
+            let nextRoundNumber = currentRoundNum + 1
+            var nextStartDate = currentRound.end_date
+            var nextEndDate: Date
+            
+            switch duration {
+            case .daily:
+                nextStartDate = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: currentRound.end_date)!)
+                nextEndDate = calendar.date(byAdding: .day, value: 1, to: nextStartDate)!
+            case .weekly:
+                nextStartDate = calendar.date(byAdding: .day, value: 1, to: currentRound.end_date)!
+                nextEndDate = calendar.date(byAdding: .weekOfYear, value: 1, to: nextStartDate)!
+            case .monthly:
+                nextStartDate = calendar.date(byAdding: .day, value: 1, to: currentRound.end_date)!
+                nextEndDate = calendar.date(byAdding: .month, value: 1, to: nextStartDate)!
+            }
+            
+            // Create next round
+            let formatter = ISO8601DateFormatter()
+            let newRound = ChallengeRoundInsert(
+                challenge_id: challenge.id,
+                round_number: nextRoundNumber,
+                start_date: formatter.string(from: nextStartDate),
+                end_date: formatter.string(from: nextEndDate),
+                status: "active"
+            )
+            
+            try await client
+                .from("challenge_rounds")
+                .insert(newRound)
+                .execute()
+            
+            // Update challenge's current_round_number
+            try await client
+                .from("challenges")
+                .update(["current_round_number": nextRoundNumber])
+                .eq("id", value: challenge.id)
+                .execute()
+            
+            return true
+            
+        } catch {
+            print("Advance round error: \(error)")
+            return false
+        }
+    }
+}
+
+// MARK: - Helper Structs for Round Management
+
+struct RoundParticipantInsert: Encodable {
+    let round_id: UUID
+    let user_id: UUID
+    let value: Double
+    let rank: Int
+}
+
+struct ChallengeRoundInsert: Encodable {
+    let challenge_id: UUID
+    let round_number: Int
+    let start_date: String
+    let end_date: String
+    let status: String
 }

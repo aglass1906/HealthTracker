@@ -19,6 +19,8 @@ struct CreateChallengeView: View {
     @State private var hasEndDate = false
     @State private var endDate = Date()
     @State private var type: ChallengeType = .count
+    @State private var enableRounds = false
+    @State private var roundDuration: RoundDuration = .weekly
     
     var body: some View {
         NavigationStack {
@@ -67,6 +69,22 @@ struct CreateChallengeView: View {
                     }
                 }
                 
+                Section("Rounds") {
+                    Toggle("Enable Rounds", isOn: $enableRounds)
+                    
+                    if enableRounds {
+                        Picker("Round Duration", selection: $roundDuration) {
+                            ForEach(RoundDuration.allCases, id: \.self) { duration in
+                                Text(duration.displayName).tag(duration)
+                            }
+                        }
+                        
+                        Text("Each round will have a winner. The overall champion is the player with the most round wins!")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
                 Section {
                     Button {
                         create()
@@ -108,7 +126,8 @@ struct CreateChallengeView: View {
                 metric: selectedMetric,
                 target: target,
                 startDate: startDate,
-                endDate: (hasEndDate || type == .count) ? endDate : nil // Force end date for count
+                endDate: (hasEndDate || type == .count) ? endDate : nil, // Force end date for count
+                roundDuration: enableRounds ? roundDuration : nil
             )
             
             if success {

@@ -20,6 +20,9 @@ struct Challenge: Identifiable, Codable {
     let end_date_string: String?
     let status: ChallengeStatus
     let created_at: Date
+    let round_duration: String?
+    let current_round_number: Int?
+    let total_rounds: Int?
     
     // Computed props to expose Dates to the app
     var start_date: Date {
@@ -38,10 +41,16 @@ struct Challenge: Identifiable, Codable {
                ISO8601DateFormatter().date(from: dateString)
     }
     
+    var roundDuration: RoundDuration? {
+        guard let durationString = round_duration else { return nil }
+        return RoundDuration(rawValue: durationString)
+    }
+    
     enum CodingKeys: String, CodingKey {
         case id, family_id, creator_id, title, description, type, metric, target_value, status, created_at
         case start_date_string = "start_date"
         case end_date_string = "end_date"
+        case round_duration, current_round_number, total_rounds
     }
     
     // Helper to check if active
@@ -118,4 +127,60 @@ enum ChallengeStatus: String, Codable {
     case active
     case completed
     case cancelled
+}
+
+enum RoundDuration: String, Codable, CaseIterable {
+    case daily
+    case weekly
+    case monthly
+    
+    var displayName: String {
+        switch self {
+        case .daily: return "Daily"
+        case .weekly: return "Weekly"
+        case .monthly: return "Monthly"
+        }
+    }
+}
+
+struct ChallengeRound: Identifiable, Codable {
+    let id: UUID
+    let challenge_id: UUID
+    let round_number: Int
+    let start_date_string: String
+    let end_date_string: String
+    let winner_id: UUID?
+    let status: String
+    let created_at: Date
+    
+    var start_date: Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: start_date_string) ?? 
+               ISO8601DateFormatter().date(from: start_date_string) ?? 
+               Date()
+    }
+    
+    var end_date: Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: end_date_string) ?? 
+               ISO8601DateFormatter().date(from: end_date_string) ?? 
+               Date()
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id, challenge_id, round_number, winner_id, status, created_at
+        case start_date_string = "start_date"
+        case end_date_string = "end_date"
+    }
+}
+
+struct RoundParticipant: Identifiable, Codable {
+    let id: UUID
+    let round_id: UUID
+    let user_id: UUID
+    let value: Double
+    let rank: Int?
+    let created_at: Date
 }
