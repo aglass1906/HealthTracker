@@ -12,12 +12,13 @@ struct ChallengeDetailView: View {
     let challenge: Challenge
     @StateObject private var viewModel = ChallengeViewModel()
     @State private var showingEdit = false
+    @State private var selectedTab = 0
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Header Card
+        VStack(spacing: 0) {
+            // Header Card (always visible)
+            ScrollView {
                 VStack(spacing: 8) {
                     Image(systemName: challenge.metric.icon)
                         .font(.system(size: 48))
@@ -57,6 +58,11 @@ struct ChallengeDetailView: View {
                     
                     VStack(spacing: 4) {
                         Text("Metric: \(challenge.metric.displayName)")
+                        if let duration = challenge.roundDuration {
+                            Text("Rounds: \(duration.displayName)")
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.purple)
+                        }
                         Text("Start: \(challenge.start_date.formatted(.dateTime.weekday().hour().minute()))")
                         if let endDate = challenge.end_date {
                             Text("End: \(endDate.formatted(.dateTime.weekday().hour().minute()))")
@@ -77,21 +83,30 @@ struct ChallengeDetailView: View {
                 .background(Color(.secondarySystemBackground))
                 .cornerRadius(16)
                 .padding(.horizontal)
-                
-                // Leaderboard
-                if viewModel.isLoading {
-                    ProgressView()
-                } else {
-                    LazyVStack(spacing: 16) {
-                        ForEach(viewModel.participants) { participant in
-                            ParticipantRow(participant: participant, target: Double(challenge.target_value), metric: challenge.metric, type: challenge.type)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.horizontal)
-                }
+                .padding(.top)
             }
-            .padding(.vertical)
+            .frame(height: 280)
+            
+            // Tab Picker (only for round-based challenges)
+            if challenge.round_duration != nil {
+                Picker("View", selection: $selectedTab) {
+                    Text("Leaderboard").tag(0)
+                    Text("Rounds").tag(1)
+                }
+                .pickerStyle(.segmented)
+                .padding()
+            }
+            
+            // Content based on selected tab
+            if challenge.round_duration != nil {
+                if selectedTab == 0 {
+                    leaderboardView
+                } else {
+                    ChallengeRoundsView(challenge: challenge, viewModel: viewModel)
+                }
+            } else {
+                leaderboardView
+            }
         }
         .navigationTitle("Challenge")
         .navigationBarTitleDisplayMode(.inline)
@@ -116,6 +131,25 @@ struct ChallengeDetailView: View {
         }
         .refreshable {
             await viewModel.loadProgress(for: challenge)
+        }
+    }
+    
+    // MARK: - Leaderboard View
+    
+    private var leaderboardView: some View {
+        ScrollView {
+            if viewModel.isLoading {
+                ProgressView()
+                    .padding()
+            } else {
+                LazyVStack(spacing: 16) {
+                    ForEach(viewModel.participants) { participant in
+                        ParticipantRow(participant: participant, target: Double(challenge.target_value), metric: challenge.metric, type: challenge.type)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical)
+            }
         }
     }
 }
