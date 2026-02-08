@@ -14,9 +14,22 @@
 		13E97B752F03159400CE3399 /* HealthTracker.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HealthTracker.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		13D2E98F2F38C38A0028BD7A /* Exceptions for "HealthTracker" folder in "HealthTracker" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 13E97B742F03159400CE3399 /* HealthTracker */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		13E97B772F03159400CE3399 /* HealthTracker */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				13D2E98F2F38C38A0028BD7A /* Exceptions for "HealthTracker" folder in "HealthTracker" target */,
+			);
 			path = HealthTracker;
 			sourceTree = "<group>";
 		};
@@ -274,6 +287,7 @@
 				DEVELOPMENT_TEAM = E8QJP225V8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HealthTracker/Info.plist;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "HealthTracker needs access to your health data to track your steps, flights, calories, workouts, and activity rings.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "HealthTracker needs access to update your health data.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -309,6 +323,7 @@
 				DEVELOPMENT_TEAM = E8QJP225V8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = HealthTracker/Info.plist;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "HealthTracker needs access to your health data to track your steps, flights, calories, workouts, and activity rings.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "HealthTracker needs access to update your health data.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

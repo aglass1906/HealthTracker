@@ -58,6 +58,10 @@ class HealthKitManager: ObservableObject {
         // We rely on whether we have requested authorization.
         isAuthorized = hasRequestedAuthorization
         
+        if isAuthorized {
+            startObservingHealthData()
+        }
+        
         // We still fetch the status, but it will likely remain .notDetermined for read-only types
         if let stepCount = HKObjectType.quantityType(forIdentifier: .stepCount) {
             authorizationStatus = healthStore.authorizationStatus(for: stepCount)
@@ -70,6 +74,51 @@ class HealthKitManager: ObservableObject {
         hasRequestedAuthorization = false
         isAuthorized = false
         authorizationStatus = .notDetermined
+    }
+    
+    // MARK: - Background Delivery
+    
+    func startObservingHealthData() {
+        guard isAuthorized else { return }
+        
+        let typesToObserve: [(HKSampleType, HKUpdateFrequency)] = [
+            (HKObjectType.quantityType(forIdentifier: .stepCount)!, .hourly),
+            (HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!, .hourly),
+            (HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!, .hourly),
+            (HKObjectType.quantityType(forIdentifier: .flightsClimbed)!, .hourly),
+            (HKObjectType.workoutType(), .immediate)
+        ]
+        
+        for (type, frequency) in typesToObserve {
+            // 1. Enable Background Delivery
+            healthStore.enableBackgroundDelivery(for: type, frequency: frequency) { success, error in
+                if let error = error {
+                    print("❌ Failed to enable background delivery for \(type.identifier): \(error.localizedDescription)")
+                } else {
+                    print("✅ Background delivery enabled for \(type.identifier) at \(frequency == .immediate ? "immediate" : "hourly") frequency")
+                }
+            }
+            
+            // 2. Execute Observer Query
+            let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] query, completionHandler, error in
+                if let error = error {
+                    print("❌ Observer query failed for \(type.identifier): \(error.localizedDescription)")
+                    completionHandler()
+                    return
+                }
+                
+                print("🔄 HealthKit update received for \(type.identifier)")
+                
+                // Trigger background sync
+                Task {
+                    await BackgroundTaskManager.shared.handleHealthKitUpdate {
+                        completionHandler()
+                    }
+                }
+            }
+            
+            healthStore.execute(query)
+        }
     }
     
     // MARK: - Fetch Today's Data
