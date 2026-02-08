@@ -96,6 +96,23 @@ struct DashboardView: View {
                 VStack(spacing: 20) {
                     // Header Section
                     VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Text("BETA Test")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(Color.orange))
+                            
+                            Text(getAppVersion())
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            
+                            Spacer()
+                        }
+                        .padding(.bottom, 4)
+
                         Text("Today")
                             .font(.largeTitle)
                             .fontWeight(.bold)
@@ -280,6 +297,12 @@ struct DashboardView: View {
             return String(format: "%.1fk", value / 1000)
         }
         return String(format: "%.0f", value)
+    }
+    
+    private func getAppVersion() -> String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
+        return "\(version) (\(build))"
     }
 }
 
@@ -506,7 +529,7 @@ struct DailyDataRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(data.date.formatted(date: .abbreviated, time: .omitted))
+                Text(data.date.formatted(Date.FormatStyle().weekday(.abbreviated).month(.abbreviated).day().year()))
                     .font(.headline)
                 Spacer()
                 Text(data.date.formatted(date: .omitted, time: .omitted))
@@ -650,34 +673,78 @@ struct DailySummaryView: View {
 
 struct SummaryView: View {
     @StateObject private var dataStore = HealthDataStore.shared
-    @State private var selectedRange: TimeRange = .week
+    @State private var selectedRange: TimeRange = .today
+    @State private var referenceDate = Date()
     @State private var customStartDate = Date()
     @State private var customEndDate = Date()
     @State private var showingCustomRange = false
     
     enum TimeRange: String, CaseIterable {
+        case today = "Today"
         case week = "Week"
         case month = "Month"
         case custom = "Custom"
     }
     
     var summary: HealthSummary {
-        let calendar = Calendar.current
-        let endDate = calendar.startOfDay(for: Date())
-        let startDate: Date
-        
-        switch selectedRange {
-        case .week:
-            startDate = calendar.date(byAdding: .day, value: -7, to: endDate)!
-        case .month:
-            startDate = calendar.date(byAdding: .month, value: -1, to: endDate)!
-        case .custom:
-            startDate = calendar.startOfDay(for: customStartDate)
-        }
-        
+        let (startDate, endDate) = getDateRange()
         return dataStore.getSummary(for: startDate, to: endDate)
     }
     
+    private func getDateRange() -> (Date, Date) {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: referenceDate)
+        
+        switch selectedRange {
+        case .today:
+            return (today, today)
+        case .week:
+            // Find start of current week (Sunday)
+            let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: today)
+            let startOfWeek = calendar.date(from: components)!
+            let endOfWeek = calendar.date(byAdding: .day, value: 6, to: startOfWeek)!
+            return (startOfWeek, endOfWeek)
+        case .month:
+            // Find start of current month
+            let components = calendar.dateComponents([.year, .month], from: today)
+            let startOfMonth = calendar.date(from: components)!
+            let endOfMonth = calendar.date(byAdding: .month, value: 1, to: startOfMonth)!.addingTimeInterval(-1)
+            let endOfMonthDay = calendar.startOfDay(for: endOfMonth)
+            return (startOfMonth, endOfMonthDay)
+        case .custom:
+            return (calendar.startOfDay(for: customStartDate), calendar.startOfDay(for: customEndDate))
+        }
+    }
+    
+    private var dateRangeLabel: String {
+        let (start, end) = getDateRange()
+        
+        switch selectedRange {
+        case .today:
+            return start.formatted(date: .abbreviated, time: .omitted)
+        case .week:
+            return "\(start.formatted(Date.FormatStyle().month(.abbreviated).day())) - \(end.formatted(Date.FormatStyle().month(.abbreviated).day()))"
+        case .month:
+            return start.formatted(Date.FormatStyle().month(.wide).year())
+        case .custom:
+            return "\(start.formatted(date: .abbreviated, time: .omitted)) - \(end.formatted(date: .abbreviated, time: .omitted))"
+        }
+    }
+    
+    private func moveDate(by value: Int) {
+        let calendar = Calendar.current
+        switch selectedRange {
+        case .today:
+            referenceDate = calendar.date(byAdding: .day, value: value, to: referenceDate) ?? referenceDate
+        case .week:
+            referenceDate = calendar.date(byAdding: .weekOfYear, value: value, to: referenceDate) ?? referenceDate
+        case .month:
+            referenceDate = calendar.date(byAdding: .month, value: value, to: referenceDate) ?? referenceDate
+        case .custom:
+            break
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -691,11 +758,62 @@ struct SummaryView: View {
                     .pickerStyle(.segmented)
                     .padding(.horizontal)
                     
+                    // Date Navigation
+                    HStack {
+                        Button(action: { moveDate(by: -1) }) {
+                            Image(systemName: "chevron.left")
+                                .padding(8)
+                                .background(Color(.systemGray6))
+                                .clipShape(Circle())
+                        }
+                        
+                        Text(dateRangeLabel)
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .onTapGesture {
+                                showingCustomRange = true
+                            }
+                        
+                        Button(action: { moveDate(by: 1) }) {
+                            Image(systemName: "chevron.right")
+                                .padding(8)
+                                .background(Color(.systemGray6))
+                                .clipShape(Circle())
+                        }
+                        
+                        if selectedRange != .custom {
+                            Button(action: { showingCustomRange = true }) {
+                                Image(systemName: "calendar")
+                                    .padding(8)
+                                    .background(Color(.systemGray6))
+                                    .clipShape(Circle())
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .foregroundStyle(.primary)
+                    .popover(isPresented: $showingCustomRange) {
+                        VStack {
+                            DatePicker("Select Date", selection: $referenceDate, displayedComponents: .date)
+                                .datePickerStyle(.graphical)
+                                .padding()
+                                .presentationDetents([.medium])
+                                .onChange(of: referenceDate) { _ in
+                                    showingCustomRange = false
+                                }
+                        }
+                    }
+                    
                     if selectedRange == .custom {
-                        DatePicker("Start Date", selection: $customStartDate, displayedComponents: .date)
-                            .padding(.horizontal)
-                        DatePicker("End Date", selection: $customEndDate, displayedComponents: .date)
-                            .padding(.horizontal)
+                         // Custom range pickers (keep existing)
+                        HStack {
+                             DatePicker("Start", selection: $customStartDate, displayedComponents: .date)
+                                 .labelsHidden()
+                             Text("-")
+                             DatePicker("End", selection: $customEndDate, displayedComponents: .date)
+                                 .labelsHidden()
+                        }
+                         .padding(.horizontal)
                     }
                     
                     // Summary Stats
@@ -1060,6 +1178,17 @@ struct ProfileView: View {
                         }
                     }
                 }
+                
+                Section {
+                    HStack {
+                        Spacer()
+                        Text(getAppVersion())
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .listRowBackground(Color.clear)
+                }
             }
             .navigationTitle("Profile")
             .sheet(isPresented: $showingAuthorization) {
@@ -1120,6 +1249,12 @@ struct ProfileView: View {
         }
         
         return "HT"
+    }
+    
+    private func getAppVersion() -> String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
+        return "Version \(version) (\(build))"
     }
 }
 
