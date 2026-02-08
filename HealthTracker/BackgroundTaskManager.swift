@@ -54,6 +54,17 @@ class BackgroundTaskManager {
     
     @MainActor
     func handleHealthKitUpdate(completion: @escaping () -> Void) {
+        // Safety valve: Prevent queue from growing too large (e.g. infinite loop of updates)
+        if pendingCompletions.count >= 100 {
+            print("⚠️ High volume of HealthKit updates (\(pendingCompletions.count)). Flushing queue.")
+            completion()
+            // Clear existing queue to free memory, but keep debouncing active
+            let oldCompletions = pendingCompletions
+            pendingCompletions.removeAll()
+            oldCompletions.forEach { $0() }
+            return
+        }
+
         print("⚡️ HealthKit background delivery received - queueing")
         
         pendingCompletions.append(completion)

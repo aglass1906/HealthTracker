@@ -110,8 +110,9 @@ class HealthKitManager: ObservableObject {
                 print("🔄 HealthKit update received for \(type.identifier)")
                 
                 // Trigger background sync
-                Task {
-                    await BackgroundTaskManager.shared.handleHealthKitUpdate {
+                // Use DispatchQueue to avoid Task overhead for high-frequency updates
+                DispatchQueue.main.async {
+                    BackgroundTaskManager.shared.handleHealthKitUpdate {
                         completionHandler()
                     }
                 }
@@ -327,7 +328,7 @@ class HealthKitManager: ObservableObject {
             let query = HKSampleQuery(
                 sampleType: workoutType,
                 predicate: predicate,
-                limit: HKObjectQueryNoLimit,
+                limit: 50, // Limit to reasonable count to avoid OOM
                 sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
             ) { _, samples, error in
                 if let error = error {
@@ -398,7 +399,7 @@ class HealthKitManager: ObservableObject {
             let query = HKSampleQuery(
                 sampleType: workoutType,
                 predicate: predicate,
-                limit: HKObjectQueryNoLimit,
+                limit: 50, // Limit to 50 workouts per day (safety cap)
                 sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)]
             ) { _, samples, error in
                 if let error = error {
