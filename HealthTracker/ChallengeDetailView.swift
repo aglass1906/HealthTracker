@@ -13,79 +13,105 @@ struct ChallengeDetailView: View {
     @StateObject private var viewModel = ChallengeViewModel()
     @State private var showingEdit = false
     @State private var selectedTab = 0
+    @State private var leaderboardMode = 1 // 0: Total, 1: Wins
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
         VStack(spacing: 0) {
             // Header Card (always visible)
-            ScrollView {
-                VStack(spacing: 8) {
+            // Header Card
+            VStack(alignment: .leading, spacing: 12) {
+                // Row 1: Icon + Title
+                HStack(spacing: 12) {
                     Image(systemName: challenge.metric.icon)
-                        .font(.system(size: 48))
-                        .foregroundStyle(.blue)
-                        .padding(.bottom, 8)
-                    
-                    Text(challenge.title)
                         .font(.title2)
-                        .fontWeight(.bold)
-                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Color.blue)
+                        .clipShape(Circle())
                     
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(challenge.title)
+                            .font(.headline)
+                            .fontWeight(.bold)
+                        
+                        if let creatorName = viewModel.creatorName {
+                            Text("by \(creatorName)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                }
+                
+                Divider()
+                
+                // Row 2: Goal/Metric + Rounds
+                HStack {
+                    // Goal Pill
                     if challenge.type == .streak {
-                        Text("Goal: \(challenge.target_value) \(challenge.metric.unit) / day")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
+                        Text("\(challenge.target_value) \(challenge.metric.unit) / day")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
                             .background(Color.orange.opacity(0.1))
-                            .cornerRadius(20)
+                            .foregroundStyle(.orange)
+                            .cornerRadius(8)
                     } else if challenge.type == .count {
-                        Text("Goal: Most \(challenge.metric.displayName)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
+                        Text("Most \(challenge.metric.displayName)")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
                             .background(Color.purple.opacity(0.1))
-                            .cornerRadius(20)
+                            .foregroundStyle(.purple)
+                            .cornerRadius(8)
                     } else {
-                        Text("Goal: \(challenge.target_value) \(challenge.metric.unit)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
+                        Text("\(challenge.target_value) \(challenge.metric.unit)")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
                             .background(Color.blue.opacity(0.1))
-                            .cornerRadius(20)
+                            .foregroundStyle(.blue)
+                            .cornerRadius(8)
                     }
                     
-                    VStack(spacing: 4) {
-                        Text("Metric: \(challenge.metric.displayName)")
+                    Spacer()
+                    
+                    // Metric & Rounds
+                    HStack(spacing: 4) {
                         if let duration = challenge.roundDuration {
-                            Text("Rounds: \(duration.displayName)")
-                                .fontWeight(.semibold)
+                            Text("\(duration.displayName) Rounds")
+                                .fontWeight(.medium)
                                 .foregroundStyle(.purple)
-                        }
-                        Text("Start: \(challenge.start_date.formatted(.dateTime.weekday().hour().minute()))")
-                        if let endDate = challenge.end_date {
-                            Text("End: \(endDate.formatted(.dateTime.weekday().hour().minute()))")
                         } else {
-                            Text("Open Ended")
-                        }
-                        if let creatorName = viewModel.creatorName {
-                            Text("Created by \(creatorName)")
-                                .padding(.top, 4)
+                            Text(challenge.metric.displayName)
                         }
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(.top, 4)
                 }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(16)
-                .padding(.horizontal)
-                .padding(.top)
+                
+                // Row 3: Dates
+                HStack {
+                    Label(challenge.start_date.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
+                    Spacer()
+                    if let endDate = challenge.end_date {
+                        Label(endDate.formatted(date: .abbreviated, time: .shortened), systemImage: "flag.checkered")
+                    } else {
+                        Text("Open Ended")
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             }
-            .frame(height: 280)
+            .padding()
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(16)
+            .padding(.horizontal)
+            .padding(.top)
             
             // Tab Picker (only for round-based challenges)
             if challenge.round_duration != nil {
@@ -128,27 +154,101 @@ struct ChallengeDetailView: View {
         }
         .task {
             await viewModel.loadProgress(for: challenge)
+            if challenge.round_duration != nil {
+                await viewModel.refreshRoundStatuses(for: challenge)
+            }
         }
         .refreshable {
             await viewModel.loadProgress(for: challenge)
+            if challenge.round_duration != nil {
+                await viewModel.refreshRoundStatuses(for: challenge)
+            }
         }
     }
     
     // MARK: - Leaderboard View
     
+    private var sortedWinCounts: [(userId: UUID, wins: Int)] {
+        viewModel.roundWinCounts.map { (userId: $0.key, wins: $0.value) }
+            .sorted { $0.wins > $1.wins }
+    }
+    
     private var leaderboardView: some View {
         ScrollView {
+            if challenge.round_duration != nil {
+                HStack {
+                    Text("Standings")
+                        .font(.headline)
+                    Spacer()
+                    Menu {
+                        Button {
+                            leaderboardMode = 2
+                        } label: {
+                            Label("Current Round", systemImage: leaderboardMode == 2 ? "checkmark" : "")
+                        }
+                        Button {
+                            leaderboardMode = 1
+                        } label: {
+                            Label("Most Wins", systemImage: leaderboardMode == 1 ? "checkmark" : "")
+                        }
+                        Button {
+                            leaderboardMode = 0
+                        } label: {
+                            Label("Total Progress", systemImage: leaderboardMode == 0 ? "checkmark" : "")
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(leaderboardMode == 2 ? "Current Round" : (leaderboardMode == 1 ? "Most Wins" : "Total Progress"))
+                            Image(systemName: "chevron.down")
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.blue)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom)
+            }
+            
             if viewModel.isLoading {
                 ProgressView()
                     .padding()
             } else {
                 LazyVStack(spacing: 16) {
-                    ForEach(viewModel.participants) { participant in
-                        ParticipantRow(participant: participant, target: Double(challenge.target_value), metric: challenge.metric, type: challenge.type)
+                    if leaderboardMode == 2 && challenge.round_duration != nil {
+                        // Current Round ONLY
+                        if viewModel.currentRoundStats.isEmpty {
+                            Text("No active round")
+                                .foregroundStyle(.secondary)
+                                .padding()
+                        } else {
+                            ForEach(viewModel.currentRoundStats) { participant in
+                                ParticipantRow(participant: participant, target: Double(challenge.target_value), metric: challenge.metric, type: challenge.type)
+                                    .id("\(participant.id)-current")
+                            }
+                        }
+                    } else if leaderboardMode == 1 && challenge.round_duration != nil {
+                        // Total Wins ONLY
+                        if sortedWinCounts.isEmpty {
+                            Text("No wins yet")
+                                .foregroundStyle(.secondary)
+                                .padding()
+                        } else {
+                            ForEach(sortedWinCounts, id: \.userId) { item in
+                                WinCountRow(userId: item.userId, wins: item.wins, participants: viewModel.participants)
+                                    .id("\(item.userId)-wins")
+                            }
+                        }
+                    } else {
+                        // Total Progress
+                        ForEach(viewModel.participants) { participant in
+                            ParticipantRow(participant: participant, target: Double(challenge.target_value), metric: challenge.metric, type: challenge.type)
+                                .id("\(participant.id)-total")
+                        }
                     }
                 }
                 .padding(.horizontal)
                 .padding(.vertical)
+                .id(leaderboardMode) // Force refresh when switching modes
             }
         }
     }

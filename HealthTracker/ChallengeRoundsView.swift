@@ -11,120 +11,64 @@ struct ChallengeRoundsView: View {
     let challenge: Challenge
     @ObservedObject var viewModel: ChallengeViewModel
     
+    @State private var selectedFilter: RoundFilter = .all
+    
+    enum RoundFilter: String, CaseIterable, Identifiable {
+        case all = "All"
+        case active = "Active"
+        case past = "Past"
+        case upcoming = "Future"
+        
+        var id: String { self.rawValue }
+    }
+    
+    var filteredRounds: [ChallengeRound] {
+        switch selectedFilter {
+        case .all:
+            return viewModel.rounds
+        case .active:
+            return viewModel.rounds.filter { $0.status == "active" }
+        case .past:
+            return viewModel.rounds.filter { $0.status == "completed" }
+        case .upcoming:
+            return viewModel.rounds.filter { $0.status == "upcoming" || ($0.status != "active" && $0.status != "completed") }
+        }
+    }
+    
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
-                // Current Round (if active)
-                if let currentRound = viewModel.rounds.first(where: { $0.status == "active" }) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Current Round")
-                                .font(.headline)
-                            
-                            Spacer()
-                            
-                            Text("LIVE")
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.red)
-                                .cornerRadius(8)
-                        }
-                        .padding(.horizontal)
-                        
-                        // Current Round Info Card
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text(roundLabel(for: currentRound))
-                                    .font(.title3)
-                                    .fontWeight(.bold)
-                                
-                                Spacer()
-                            }
-                            
-                            HStack {
-                                Text(currentRound.start_date.formatted(.dateTime.month().day()))
-                                Text("–")
-                                Text(currentRound.end_date.formatted(.dateTime.month().day()))
-                            }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            
-                            if !viewModel.currentRoundParticipants.isEmpty {
-                                Divider()
-                                    .padding(.vertical, 4)
-                                
-                                Text("Live Rankings")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                
-                                ForEach(viewModel.currentRoundParticipants) { participant in
-                                    CurrentRoundParticipantRow(
-                                        participant: participant,
-                                        allParticipants: viewModel.participants,
-                                        metric: challenge.metric
-                                    )
-                                }
-                            } else {
-                                Text("No data yet for this round")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.top, 4)
-                            }
-                        }
+            VStack(spacing: 16) {
+                // Filter Picker
+                Picker("Filter", selection: $selectedFilter) {
+                    ForEach(RoundFilter.allCases) { filter in
+                        Text(filter.rawValue).tag(filter)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.top)
+
+                // Rounds List
+                if viewModel.isLoading {
+                    ProgressView()
                         .padding()
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.blue.opacity(0.3), lineWidth: 2)
-                        )
-                        .padding(.horizontal)
+                } else if filteredRounds.isEmpty {
+                    ContentUnavailableView {
+                        Label("No rounds found", systemImage: "clock.arrow.circlepath")
+                    } description: {
+                        Text("Try changing the filter")
                     }
-                }
-                
-                // Overall Leaderboard (by wins)
-                if !viewModel.roundWinCounts.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Overall Leaderboard")
-                            .font(.headline)
-                            .padding(.horizontal)
-                        
-                        VStack(spacing: 12) {
-                            ForEach(sortedWinCounts, id: \.userId) { item in
-                                WinCountRow(userId: item.userId, wins: item.wins, participants: viewModel.participants)
-                            }
+                    .padding(.top, 40)
+                } else {
+                    LazyVStack(spacing: 16) {
+                        ForEach(filteredRounds) { round in
+                            RoundCard(round: round, challenge: challenge, participants: viewModel.participants)
                         }
-                        .padding(.horizontal)
                     }
-                }
-                
-                // Rounds History
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Rounds")
-                        .font(.headline)
-                        .padding(.horizontal)
-                    
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .padding()
-                    } else if viewModel.rounds.isEmpty {
-                        Text("No rounds yet")
-                            .foregroundStyle(.secondary)
-                            .padding()
-                    } else {
-                        VStack(spacing: 16) {
-                            ForEach(viewModel.rounds) { round in
-                                RoundCard(round: round, challenge: challenge, participants: viewModel.participants)
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
+                    .padding(.horizontal)
+                    .padding(.bottom)
                 }
             }
-            .padding(.vertical)
         }
         .task {
             await viewModel.refreshRoundStatuses(for: challenge)

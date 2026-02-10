@@ -37,6 +37,8 @@ class ChallengeViewModel: ObservableObject {
     @Published var rounds: [ChallengeRound] = []
     @Published var currentRoundParticipants: [RoundParticipant] = []
     @Published var roundWinCounts: [UUID: Int] = [:] // user_id -> win count
+    @Published var currentRoundStats: [ChallengeParticipant] = []
+
     
     let client = AuthManager.shared.client
     
@@ -249,8 +251,20 @@ class ChallengeViewModel: ObservableObject {
             // Format start_date to YYYY-MM-DD
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
+            formatter.calendar = Calendar.current
+            formatter.timeZone = TimeZone.current
+            
             let startString = formatter.string(from: challenge.start_date)
-            let todayString = formatter.string(from: Date())
+            
+            // Determine effective end date (min of now or challenge end)
+            let now = Date()
+            let effectiveEndDate: Date
+            if let challengeEnd = challenge.end_date {
+                effectiveEndDate = min(now, challengeEnd)
+            } else {
+                effectiveEndDate = now
+            }
+            let endString = formatter.string(from: effectiveEndDate)
             
             // Note: Schema checks. 'daily_stats' has steps, calories, distance.
             // It might NOT have 'exercise_minutes' column yet unless we verify.
@@ -262,7 +276,7 @@ class ChallengeViewModel: ObservableObject {
                 .select()
                 .in("user_id", values: userIds)
                 .gte("date", value: startString)
-                .lte("date", value: todayString)
+                .lte("date", value: endString)
                 .execute()
                 .value
             
@@ -552,8 +566,8 @@ class ChallengeViewModel: ObservableObject {
         isLoading = false
     }
     
-    func calculateRoundWinner(for challenge: Challenge, round: ChallengeRound) async {
-        guard let duration = challenge.roundDuration else { return }
+    func fetchRoundStats(for challenge: Challenge, round: ChallengeRound) async -> [ChallengeParticipant] {
+        guard challenge.roundDuration != nil else { return [] }
         
         do {
             // 1. Get profiles
@@ -567,12 +581,15 @@ class ChallengeViewModel: ObservableObject {
             let userIds = profiles.map { $0.id }
             
             // 2. Aggregate stats for the round date range
-            // Use date-only format for daily_stats queries (YYYY-MM-DD)
             let dateFormatter = DateFormatter()
             dateFormatter.dateFormat = "yyyy-MM-dd"
+            dateFormatter.calendar = Calendar.current
             dateFormatter.timeZone = TimeZone.current
             
             let startString = dateFormatter.string(from: round.start_date)
+            // Use min(now, end_date) to not show future stats if round acts weird, though round end is usually fixed.
+            // But for live stats of active round, we just want up to now?
+            // Actually, querying date <= endString is fine, DB won't have future dates.
             let endString = dateFormatter.string(from: round.end_date)
             
             let stats: [DailyStatDB] = try await client
@@ -585,7 +602,7 @@ class ChallengeViewModel: ObservableObject {
                 .value
             
             // 3. Calculate values
-            var participantValues: [(userId: UUID, value: Double)] = []
+            var tempParticipants: [ChallengeParticipant] = []
             
             for profile in profiles {
                 let userStats = stats.filter { $0.user_id == profile.id }
@@ -608,19 +625,50 @@ class ChallengeViewModel: ObservableObject {
                     totalValue = Double(totalInt)
                 }
                 
-                participantValues.append((userId: profile.id, value: totalValue))
+                // For round stats, progress might be relative to leader or target?
+                // Rounds usually don't have a fixed "target", it's "most X".
+                // Let's use 0 for now, or relative to max later.
+                tempParticipants.append(ChallengeParticipant(
+                    id: profile.id,
+                    profile: profile,
+                    value: totalValue,
+                    progress: 0,
+                    rank: 0
+                ))
             }
             
             // 4. Sort and rank
-            participantValues.sort { $0.value > $1.value }
+            tempParticipants.sort { $0.value > $1.value }
             
+            // Calculate progress relative to leader
+            let maxValue = tempParticipants.first?.value ?? 1
+            for i in 0..<tempParticipants.count {
+                tempParticipants[i].rank = i + 1
+                if maxValue > 0 {
+                    tempParticipants[i].progress = tempParticipants[i].value / maxValue
+                }
+            }
+            
+            return tempParticipants
+            
+        } catch {
+            print("Fetch round stats error: \(error)")
+            return []
+        }
+    }
+
+    func calculateRoundWinner(for challenge: Challenge, round: ChallengeRound) async {
+        let participants = await fetchRoundStats(for: challenge, round: round)
+        guard !participants.isEmpty else { return }
+        
+        do {
             // 5. Insert round_participants
-            for (index, participant) in participantValues.enumerated() {
+            for participant in participants {
                 let roundParticipant = RoundParticipantInsert(
                     round_id: round.id,
-                    user_id: participant.userId,
+                    user_id: participant.id,
                     value: participant.value,
-                    rank: index + 1
+                    rank: participant.rank
                 )
                 
                 try await client
@@ -630,32 +678,50 @@ class ChallengeViewModel: ObservableObject {
             }
             
             // 6. Determine winner(s) - all with max value
-            guard let maxValue = participantValues.first?.value, maxValue > 0 else { return }
-            let winners = participantValues.filter { $0.value == maxValue }
+            // Since list is sorted, first has max value
+            guard let firstString = participants.first, firstString.value > 0 else { return }
+            let maxValue = firstString.value
+            let winners = participants.filter { $0.value == maxValue }
             
-            // For now, set winner_id to first winner (or handle multiple winners differently)
             if let firstWinner = winners.first {
                 try await client
                     .from("challenge_rounds")
-                    .update(["winner_id": firstWinner.userId.uuidString, "status": "completed"])
+                    .update(["winner_id": firstWinner.id.uuidString, "status": "completed"])
                     .eq("id", value: round.id)
                     .execute()
                 
                 // Post to feed for each winner
+                // Need to re-fetch profiles? Or just use what we have in ChallengeParticipant?
+                // ChallengeParticipant has 'profile' which is `Profile`. Perfect.
                 for winner in winners {
-                    if let winnerProfile = profiles.first(where: { $0.id == winner.userId }) {
-                        await SocialFeedManager.shared.postRoundWinner(
-                            challengeTitle: challenge.title,
-                            roundNumber: round.round_number,
-                            winnerName: winnerProfile.display_name ?? "Unknown",
-                            familyId: challenge.family_id
-                        )
-                    }
+                    await SocialFeedManager.shared.postRoundWinner(
+                        challengeTitle: challenge.title,
+                        roundNumber: round.round_number,
+                        winnerName: winner.profile.display_name ?? "Unknown",
+                        familyId: challenge.family_id
+                    )
                 }
             }
             
         } catch {
             print("Calculate round winner error: \(error)")
+        }
+    }
+    
+    func refreshCurrentRoundStats(for challenge: Challenge) async {
+        // Find active round
+        // We rely on 'rounds' being populated. If not, we might need to look at fetchedRounds in refreshRoundStatuses
+        // But refreshRoundStatuses calls loadRounds at the end.
+        
+        if let activeRound = rounds.first(where: { $0.status == "active" }) {
+            let stats = await fetchRoundStats(for: challenge, round: activeRound)
+            await MainActor.run {
+                self.currentRoundStats = stats
+            }
+        } else {
+            await MainActor.run {
+                self.currentRoundStats = []
+            }
         }
     }
     
@@ -674,8 +740,12 @@ class ChallengeViewModel: ObservableObject {
             
             for round in fetchedRounds {
                 // Check if status needs updating
-                if round.status == "active" && now > round.end_date {
-                    // Round just ended - calculate winner
+                // Also check if round is marked completed but has no winner (e.g. created in past)
+                let isRoundEnded = round.status == "active" && now > round.end_date
+                let isPastRoundUncalculated = round.status == "completed" && round.winner_id == nil
+                
+                if isRoundEnded || isPastRoundUncalculated {
+                    // Round ended or needs calculation
                     await calculateRoundWinner(for: challenge, round: round)
                 } else if round.status == "pending" && now >= round.start_date {
                     // Round just started
@@ -689,6 +759,9 @@ class ChallengeViewModel: ObservableObject {
             
             // Reload rounds after status updates
             await loadRounds(for: challenge)
+            
+            // Refresh current round live stats
+            await refreshCurrentRoundStats(for: challenge)
             
         } catch {
             print("Refresh round statuses error: \(error)")
@@ -742,10 +815,6 @@ class ChallengeViewModel: ObservableObject {
                     }
                 }
                 
-                print("DEBUG: profiles count: \(profiles.count)")
-                print("DEBUG: rounds count: \(rounds.count)")
-                print("DEBUG: winCounts: \(winCounts)")
-                
                 // Find max wins
                 guard let (winnerId, wins) = winCounts.max(by: { $0.value < $1.value }) else {
                     // No rounds won?
@@ -753,17 +822,10 @@ class ChallengeViewModel: ObservableObject {
                     return
                 }
                 
-                print("DEBUG: winnerId: \(winnerId), wins: \(wins)")
-                
                 if let profile = profiles.first(where: { $0.id == winnerId }) {
-                    winnerName = "\(profile.display_name ?? profile.email ?? "Someone") (\(winnerId))"
-                    print("DEBUG: Found profile for winner: \(winnerName)")
+                    winnerName = profile.display_name ?? profile.email ?? "Someone"
                 } else {
-                    print("DEBUG: Profile NOT found for winnerId: \(winnerId)")
-                    // Dump profiles to see what we have
-                    for p in profiles {
-                        print("DEBUG: Profile: \(p.id) - \(p.display_name ?? "nil")")
-                    }
+                    print("Profile NOT found for winnerId: \(winnerId)")
                 }
                 
                 winMetric = "Rounds Won"
