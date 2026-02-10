@@ -19,13 +19,40 @@ struct HealthTrackerApp: App {
         _ = HealthKitManager.shared
     }
     
+    @StateObject private var authManager = AuthManager.shared
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
-                    // Schedule refresh when app goes to background
-                    BackgroundTaskManager.shared.scheduleBackgroundRefresh()
+            Group {
+                if authManager.isRestoringSession {
+                    // Splash Screen
+                    ZStack {
+                        Color(.systemBackground).ignoresSafeArea()
+                        VStack(spacing: 20) {
+                            Image(systemName: "heart.text.square.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 100, height: 100)
+                                .foregroundStyle(.red)
+                            
+                            Text("HealthTracker")
+                                .font(.largeTitle)
+                                .fontWeight(.bold)
+                            
+                            ProgressView()
+                                .controlSize(.large)
+                        }
+                    }
+                } else if authManager.isAuthenticated {
+                    ContentView()
+                        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+                            BackgroundTaskManager.shared.scheduleBackgroundRefresh()
+                        }
+                } else {
+                    LoginView()
                 }
+            }
+            .animation(.easeInOut, value: authManager.isRestoringSession)
         }
     }
 }

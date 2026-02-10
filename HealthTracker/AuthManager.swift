@@ -21,6 +21,7 @@ class AuthManager: ObservableObject {
     
     @Published var session: Session?
     @Published var isAuthenticated = false
+    @Published var isRestoringSession = true // Start true to show splash
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -29,12 +30,15 @@ class AuthManager: ObservableObject {
         
         Task {
             for await state in client.auth.authStateChanges {
-                if let session = state.session {
-                    self.session = session
-                    self.isAuthenticated = true
-                } else {
-                    self.session = nil
-                    self.isAuthenticated = false
+                await MainActor.run {
+                    if let session = state.session {
+                        self.session = session
+                        self.isAuthenticated = true
+                    } else {
+                        self.session = nil
+                        self.isAuthenticated = false
+                    }
+                    self.isRestoringSession = false // Initial check done
                 }
             }
         }

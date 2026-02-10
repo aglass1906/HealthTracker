@@ -285,7 +285,7 @@ struct CommunityView: View {
                     }
                 }
             }
-
+            
             .navigationTitle("Community")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
