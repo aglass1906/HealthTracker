@@ -245,6 +245,24 @@ struct SocialFeedItem: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.purple.opacity(0.1))
                     .cornerRadius(12)
+                } else if event.type == "challenge_created",
+                          let title = payload["title"],
+                          let goal = payload["goal"] {
+                    HStack {
+                        Image(systemName: "flag.checkered")
+                            .foregroundStyle(.purple)
+                        VStack(alignment: .leading) {
+                            Text(title)
+                                .fontWeight(.semibold)
+                            Text("Goal: \(goal)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.purple.opacity(0.1))
+                    .cornerRadius(12)
                 } else if event.type == "challenge_updated",
                           let title = payload["title"],
                           let status = payload["status"] {
@@ -364,9 +382,37 @@ struct SocialFeedItem: View {
     }
     
     var timeAgo: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: ISO8601DateFormatter().date(from: event.created_at) ?? Date(), relativeTo: Date())
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        // Try parsing with fractional seconds first
+        var date = formatter.date(from: event.created_at)
+        
+        // Fallback to standard ISO8601 if failed
+        if date == nil {
+            date = ISO8601DateFormatter().date(from: event.created_at)
+        }
+        
+        guard let validDate = date else { return "Just now" }
+        
+        let diff = Date().timeIntervalSince(validDate)
+        
+        // Just now for < 1 minute
+        if diff < 60 && diff > -60 {
+            return "Just now"
+        }
+        
+        // Relative for < 24 hours
+        if diff < 86400 {
+            let relativeFormatter = RelativeDateTimeFormatter()
+            relativeFormatter.unitsStyle = .abbreviated
+            return relativeFormatter.localizedString(for: validDate, relativeTo: Date())
+        }
+        
+        // Absolute date for older events
+        let absoluteFormatter = DateFormatter()
+        absoluteFormatter.dateFormat = "MMM d 'at' h:mm a"
+        return absoluteFormatter.string(from: validDate)
     }
     
     var description: String {
