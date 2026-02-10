@@ -38,13 +38,28 @@ struct ChallengeRoundsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                // Filter Picker
-                Picker("Filter", selection: $selectedFilter) {
-                    ForEach(RoundFilter.allCases) { filter in
-                        Text(filter.rawValue).tag(filter)
+                // Header & Filter
+                HStack {
+                    Text("Rounds")
+                        .font(.headline)
+                    Spacer()
+                    Menu {
+                        ForEach(RoundFilter.allCases) { filter in
+                            Button {
+                                selectedFilter = filter
+                            } label: {
+                                Label(filter.rawValue, systemImage: selectedFilter == filter ? "checkmark" : "")
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(selectedFilter.rawValue)
+                            Image(systemName: "chevron.down")
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.blue)
                     }
                 }
-                .pickerStyle(.segmented)
                 .padding(.horizontal)
                 .padding(.top)
 
