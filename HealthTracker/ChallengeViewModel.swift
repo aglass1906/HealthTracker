@@ -698,6 +698,11 @@ class ChallengeViewModel: ObservableObject {
     // MARK: - Challenge Completion
     
     func checkChallengeCompletion(for challenge: Challenge) async {
+        // Temp fix: Allow re-posting for the known broken challenge
+        if challenge.id.uuidString == "0d56277c-87d6-4782-93a5-c77a4a5d0e6f" {
+            UserDefaults.standard.removeObject(forKey: "posted_challenge_won_\(challenge.id.uuidString)")
+        }
+
         // Only check if challenge has ended
         guard challenge.isEnded else { return }
         
@@ -716,66 +721,121 @@ class ChallengeViewModel: ObservableObject {
                 .execute()
                 .value
             
-            let userIds = profiles.map { $0.id }
+            var winnerName = "Someone"
+            var winMetric = ""
+            var winValue = ""
             
-            // Get stats for the challenge period
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            let startString = formatter.string(from: challenge.start_date)
-            let endString = formatter.string(from: challenge.end_date ?? Date())
-            
-            let stats: [DailyStatDB] = try await client
-                .from("daily_stats")
-                .select()
-                .in("user_id", values: userIds)
-                .gte("date", value: startString)
-                .lte("date", value: endString)
-                .execute()
-                .value
-            
-            // Calculate totals per user
-            var userTotals: [(userId: UUID, value: Double)] = []
-            
-            for profile in profiles {
-                let userStats = stats.filter { $0.user_id == profile.id }
-                var totalValue: Double = 0
+            if challenge.round_duration != nil {
+                // Round-based: Winner is person with most round wins
+                let rounds: [ChallengeRound] = try await client
+                    .from("challenge_rounds")
+                    .select()
+                    .eq("challenge_id", value: challenge.id)
+                    .execute()
+                    .value
                 
-                switch challenge.metric {
-                case .steps:
-                    totalValue = Double(userStats.reduce(0) { $0 + $1.steps })
-                case .calories:
-                    totalValue = Double(userStats.reduce(0) { $0 + $1.calories })
-                case .flights:
-                    totalValue = Double(userStats.reduce(0) { $0 + $1.flights })
-                case .distance:
-                    totalValue = userStats.reduce(0) { $0 + $1.distance }
-                case .exercise_minutes:
-                    totalValue = Double(userStats.reduce(into: 0) { $0 += ($1.exercise_minutes ?? 0) })
-                case .workouts:
-                    totalValue = Double(userStats.reduce(into: 0) { $0 += ($1.workouts_count ?? 0) })
+                // Count wins
+                var winCounts: [UUID: Int] = [:]
+                for round in rounds {
+                    if let winnerId = round.winner_id {
+                        winCounts[winnerId, default: 0] += 1
+                    }
                 }
                 
-                userTotals.append((userId: profile.id, value: totalValue))
-            }
-            
-            // Sort by value descending
-            userTotals.sort { $0.value > $1.value }
-            
-            // Get winner
-            guard let winner = userTotals.first,
-                  let winnerProfile = profiles.first(where: { $0.id == winner.userId }),
-                  winner.value > 0 else {
-                // No winner or no one participated
-                UserDefaults.standard.set(true, forKey: completionKey)
-                return
+                print("DEBUG: profiles count: \(profiles.count)")
+                print("DEBUG: rounds count: \(rounds.count)")
+                print("DEBUG: winCounts: \(winCounts)")
+                
+                // Find max wins
+                guard let (winnerId, wins) = winCounts.max(by: { $0.value < $1.value }) else {
+                    // No rounds won?
+                    UserDefaults.standard.set(true, forKey: completionKey)
+                    return
+                }
+                
+                print("DEBUG: winnerId: \(winnerId), wins: \(wins)")
+                
+                if let profile = profiles.first(where: { $0.id == winnerId }) {
+                    winnerName = "\(profile.display_name ?? profile.email ?? "Someone") (\(winnerId))"
+                    print("DEBUG: Found profile for winner: \(winnerName)")
+                } else {
+                    print("DEBUG: Profile NOT found for winnerId: \(winnerId)")
+                    // Dump profiles to see what we have
+                    for p in profiles {
+                        print("DEBUG: Profile: \(p.id) - \(p.display_name ?? "nil")")
+                    }
+                }
+                
+                winMetric = "Rounds Won"
+                winValue = "\(wins) wins"
+                
+            } else {
+                // Cumulative: Existing logic
+                let userIds = profiles.map { $0.id }
+                
+                // Get stats for the challenge period
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                let startString = formatter.string(from: challenge.start_date)
+                let endString = formatter.string(from: challenge.end_date ?? Date())
+                
+                let stats: [DailyStatDB] = try await client
+                    .from("daily_stats")
+                    .select()
+                    .in("user_id", values: userIds)
+                    .gte("date", value: startString)
+                    .lte("date", value: endString)
+                    .execute()
+                    .value
+                
+                // Calculate totals per user
+                var userTotals: [(userId: UUID, value: Double)] = []
+                
+                for profile in profiles {
+                    let userStats = stats.filter { $0.user_id == profile.id }
+                    var totalValue: Double = 0
+                    
+                    switch challenge.metric {
+                    case .steps:
+                        totalValue = Double(userStats.reduce(0) { $0 + $1.steps })
+                    case .calories:
+                        totalValue = Double(userStats.reduce(0) { $0 + $1.calories })
+                    case .flights:
+                        totalValue = Double(userStats.reduce(0) { $0 + $1.flights })
+                    case .distance:
+                        totalValue = userStats.reduce(0) { $0 + $1.distance }
+                    case .exercise_minutes:
+                        totalValue = Double(userStats.reduce(into: 0) { $0 += ($1.exercise_minutes ?? 0) })
+                    case .workouts:
+                        totalValue = Double(userStats.reduce(into: 0) { $0 += ($1.workouts_count ?? 0) })
+                    }
+                    
+                    userTotals.append((userId: profile.id, value: totalValue))
+                }
+                
+                // Sort by value descending
+                userTotals.sort { $0.value > $1.value }
+                
+                // Get winner
+                guard let winner = userTotals.first,
+                      let winnerProfile = profiles.first(where: { $0.id == winner.userId }),
+                      winner.value > 0 else {
+                    // No winner or no one participated
+                    UserDefaults.standard.set(true, forKey: completionKey)
+                    return
+                }
+                
+                winnerName = winnerProfile.display_name ?? winnerProfile.email ?? "Someone"
+                winMetric = challenge.metric.displayName
+                winValue = String(format: "%.0f", winner.value)
             }
             
             // Post feed event
             let payload: [String: String] = [
                 "challenge_title": challenge.title,
-                "winner_name": winnerProfile.display_name ?? winnerProfile.email ?? "Someone",
-                "metric": challenge.metric.displayName,
-                "value": String(format: "%.0f", winner.value)
+                "winner_name": winnerName,
+                "metric": winMetric,
+                "value": winValue
             ]
             
             await SocialFeedManager.shared.post(type: .challenge_won, familyId: challenge.family_id, payload: payload)

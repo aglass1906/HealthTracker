@@ -76,7 +76,14 @@ class SocialFeedViewModel: ObservableObject {
             print("Feed fetch error: \(error)")
         }
         
+        
         isLoading = false
+        
+        // Background check for challenge completions to ensure feed is up to date
+        Task {
+            let challengeVM = ChallengeViewModel()
+            await challengeVM.fetchActiveChallenges(for: familyId)
+        }
     }
 }
 
@@ -168,9 +175,16 @@ struct SocialFeedItem: View {
                 }
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(event.profile?.display_name ?? "Someone")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
+                    if (event.type == "challenge_won" || event.type == "round_winner"),
+                       let winnerName = event.payload?["winner_name"] {
+                        Text(winnerName)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                    } else {
+                        Text(event.profile?.display_name ?? "Someone")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                    }
                     
                     Text(timeAgo)
                         .font(.caption)
