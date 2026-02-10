@@ -10,7 +10,6 @@ import SwiftUI
 struct ChallengesListView: View {
     let familyId: UUID
     @StateObject private var viewModel = ChallengeViewModel()
-    @State private var showingCreate = false
     
     var body: some View {
         VStack {
@@ -70,33 +69,10 @@ struct ChallengesListView: View {
                 }
             }
             
-            Spacer()
-            
-            Button {
-                showingCreate = true
-            } label: {
-                HStack {
-                    Image(systemName: "plus")
-                    Text("New Challenge")
-                }
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-                .padding()
-                .background(Color.blue)
-                .cornerRadius(30)
-                .shadow(radius: 5)
-            }
-            .padding(.bottom)
         }
         .task {
             // Refetch when view appears (e.g. switched tabs)
             await viewModel.fetchActiveChallenges(for: familyId)
-        }
-        .sheet(isPresented: $showingCreate, onDismiss: {
-            // Refetch after dismissing creation sheet
-            Task { await viewModel.fetchActiveChallenges(for: familyId) }
-        }) {
-            CreateChallengeView(familyId: familyId, viewModel: viewModel)
         }
     }
     

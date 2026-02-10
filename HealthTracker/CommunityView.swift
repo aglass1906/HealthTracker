@@ -186,9 +186,10 @@ class FamilyViewModel: ObservableObject {
     }
 }
 
-struct FamilyView: View {
+struct CommunityView: View {
     @StateObject private var viewModel = FamilyViewModel()
     @State private var selectedTab = 0
+    @State private var showingSettings = false
     
     var body: some View {
         NavigationStack {
@@ -196,13 +197,12 @@ struct FamilyView: View {
                 if viewModel.isLoading {
                     ProgressView()
                 } else if let family = viewModel.family {
-                    // Active Family View
+                    // Active Community View
                     VStack(spacing: 0) {
                         Picker("View", selection: $selectedTab) {
                             Text("Feed").tag(0)
                             Text("Leaderboard").tag(1)
                             Text("Challenges").tag(2)
-                            Text("Members").tag(3)
                         }
                         .pickerStyle(.segmented)
                         .padding()
@@ -216,115 +216,92 @@ struct FamilyView: View {
                             
                             ChallengesListView(familyId: family.id)
                                 .tag(2)
-                            
-                            List {
-                                Section("My Family: \(family.name)") {
-                                    ForEach(viewModel.members) { member in
-                                        HStack {
-                                            Image(systemName: "person.circle.fill")
-                                                .foregroundStyle(.blue)
-                                                .font(.title2)
-                                            VStack(alignment: .leading) {
-                                                Text(member.display_name ?? member.email ?? "Unknown")
-                                                    .font(.headline)
-                                                if member.id == AuthManager.shared.session?.user.id {
-                                                    Text("You")
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                
-                                Section("Invite Code") {
-                                    HStack {
-                                        Text(family.invite_code)
-                                            .font(.title2)
-                                            .monospaced()
-                                            .fontWeight(.bold)
-                                        Spacer()
-                                        Button {
-                                            UIPasteboard.general.string = family.invite_code
-                                        } label: {
-                                            Image(systemName: "doc.on.doc")
-                                        }
-                                    }
-                                }
-                                
-                                Section {
-                                    Button("Leave Family", role: .destructive) {
-                                        Task { await viewModel.leaveFamily() }
-                                    }
-                                }
-                            }
-                            .tag(3)
                         }
                         .tabViewStyle(.page(indexDisplayMode: .never))
                     }
                 } else {
                     // Create or Join View
-                    VStack(spacing: 30) {
-                        Image(systemName: "person.3.fill")
-                            .font(.system(size: 60))
-                            .foregroundStyle(.blue)
-                        
-                        Text("Family Challenges")
-                            .font(.title)
-                            .fontWeight(.bold)
-                        
-                        Text("Create a group or join one to compete with your family!")
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal)
-                        
-                        VStack(spacing: 16) {
-                            Text("Join a Family")
-                                .font(.headline)
+                    ScrollView {
+                        VStack(spacing: 30) {
+                            Image(systemName: "person.3.fill")
+                                .font(.system(size: 60))
+                                .foregroundStyle(.blue)
                             
-                            HStack {
-                                TextField("Enter 6-digit Code", text: $viewModel.joinCode)
-                                    .textFieldStyle(.roundedBorder)
-                                    .keyboardType(.numberPad)
+                            Text("Community Challenges")
+                                .font(.title)
+                                .fontWeight(.bold)
+                            
+                            Text("Create a community or join one to compete with your friends and family!")
+                                .multilineTextAlignment(.center)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal)
+                            
+                            VStack(spacing: 16) {
+                                Text("Join a Community")
+                                    .font(.headline)
                                 
-                                Button("Join") {
-                                    Task { await viewModel.joinFamily() }
+                                HStack {
+                                    TextField("Enter 6-digit Code", text: $viewModel.joinCode)
+                                        .textFieldStyle(.roundedBorder)
+                                        .keyboardType(.numberPad)
+                                    
+                                    Button("Join") {
+                                        Task { await viewModel.joinFamily() }
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(viewModel.joinCode.count < 6)
                                 }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(viewModel.joinCode.count < 6)
                             }
+                            .padding()
+                            // Use system background for cards in light mode, secondary system background in dark mode if needed
+                            // But here referencing Color(.secondarySystemBackground) fits standard iOS card style
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(12)
+                            
+                            Text("OR")
+                                .foregroundStyle(.secondary)
+                                .font(.caption)
+                            
+                            VStack(spacing: 16) {
+                                Text("Create New Community")
+                                    .font(.headline)
+                                
+                                HStack {
+                                    TextField("Community Name", text: $viewModel.newFamilyName)
+                                        .textFieldStyle(.roundedBorder)
+                                    
+                                    Button("Create") {
+                                        Task { await viewModel.createFamily() }
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(viewModel.newFamilyName.isEmpty)
+                                }
+                            }
+                            .padding()
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(12)
                         }
                         .padding()
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
-                        
-                        Text("OR")
-                            .foregroundStyle(.secondary)
-                            .font(.caption)
-                        
-                        VStack(spacing: 16) {
-                            Text("Create New Family")
-                                .font(.headline)
-                            
-                            HStack {
-                                TextField("Family Name", text: $viewModel.newFamilyName)
-                                    .textFieldStyle(.roundedBorder)
-                                
-                                Button("Create") {
-                                    Task { await viewModel.createFamily() }
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(viewModel.newFamilyName.isEmpty)
-                            }
-                        }
-                        .padding()
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
                     }
-                    .padding()
                 }
             }
-            .navigationTitle("Family")
+                }
+            }
+            .navigationTitle("Community")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    if viewModel.family != nil {
+                        Button {
+                            showingSettings = true
+                        } label: {
+                            Image(systemName: "gear")
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $showingSettings) {
+                CommunitySettingsView(viewModel: viewModel)
+            }
             .task {
                 await viewModel.fetchFamily()
             }

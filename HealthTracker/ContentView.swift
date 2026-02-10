@@ -40,9 +40,9 @@ struct ContentView: View {
                             }
                             .tag(1)
                         
-                        FamilyView()
+                        CommunityView()
                             .tabItem {
-                                Label("Family", systemImage: "person.3.fill")
+                                Label("Community", systemImage: "person.3.fill")
                             }
                             .tag(2)
                         
