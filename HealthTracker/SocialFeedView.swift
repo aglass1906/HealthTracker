@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Supabase
+import HealthKit
 import Combine
 
 struct SocialEvent: Codable, Identifiable {
@@ -348,34 +349,14 @@ struct SocialFeedItem: View {
     }
     
     private func reconstructWorkout(from payload: [String: String]?) -> WorkoutData? {
-        guard let payload = payload,
-              let type = payload["workout_type"] else { return nil }
-        
-        let date = ISO8601DateFormatter().date(from: event.created_at) ?? Date()
-        
-        // Parse duration
-        var duration: TimeInterval = 0
-        if let seconds = payload["duration_seconds"], let doubleVal = Double(seconds) {
-            duration = doubleVal
-        } else if let durationStr = payload["duration"] {
-             // Fallback: Try to parse "1h 30m" or "45m"
-             // This is a rough parser for backward compatibility
-             let components = durationStr.components(separatedBy: " ")
-             for comp in components {
-                 if comp.contains("h"), let val = Double(comp.replacingOccurrences(of: "h", with: "")) {
-                     duration += val * 3600
-                 } else if comp.contains("m"), let val = Double(comp.replacingOccurrences(of: "m", with: "")) {
-                     duration += val * 60
-                 }
-             }
-        }
+        guard let payload = payload else { return nil }
         
         return WorkoutData(
             id: UUID().uuidString,
-            workoutType: type,
-            startDate: date,
-            endDate: date.addingTimeInterval(duration),
-            duration: duration,
+            workoutType: payload["workout_type"] ?? "Workout",
+            startDate: Date(),
+            endDate: Date(),
+            duration: 0,
             totalEnergyBurned: Double(payload["calories"] ?? "0"),
             totalDistance: (Double(payload["distance"] ?? "0") ?? 0) * 1000
         )

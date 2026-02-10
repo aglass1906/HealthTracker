@@ -17,6 +17,8 @@ struct LeaderboardEntry: Identifiable, Codable {
     let calories: Int
     let flights: Int
     let distance: Double
+    let exercise_minutes: Int
+    let workouts_count: Int
     
     // Joined profile
     let profile: Profile?
@@ -28,6 +30,8 @@ struct LeaderboardEntry: Identifiable, Codable {
         case calories
         case flights
         case distance
+        case exercise_minutes
+        case workouts_count
         case profile
     }
 }
@@ -35,11 +39,18 @@ struct LeaderboardEntry: Identifiable, Codable {
 class LeaderboardViewModel: ObservableObject {
     @Published var entries: [LeaderboardEntry] = []
     @Published var isLoading = false
+    @Published var selectedMetric: HealthMetric = .steps {
+        didSet {
+            Task { await fetchLeaderboard(for: currentFamilyId) }
+        }
+    }
     
+    private var currentFamilyId: UUID = UUID()
     let client = AuthManager.shared.client
     
     func fetchLeaderboard(for familyId: UUID) async {
         isLoading = true
+        currentFamilyId = familyId
         
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
@@ -64,6 +75,8 @@ class LeaderboardViewModel: ObservableObject {
                 let calories: Int
                 let flights: Int
                 let distance: Double
+                let exercise_minutes: Int
+                let workouts_count: Int
             }
             
             let stats: [DailyStat] = try await client
@@ -71,7 +84,7 @@ class LeaderboardViewModel: ObservableObject {
                 .select()
                 .in("user_id", values: userIds)
                 .eq("date", value: today)
-                .order("steps", ascending: false) // Rank by steps by default
+                .order(selectedMetric.databaseColumn, ascending: false)
                 .execute()
                 .value
             
@@ -85,6 +98,8 @@ class LeaderboardViewModel: ObservableObject {
                     calories: stat.calories,
                     flights: stat.flights,
                     distance: stat.distance,
+                    exercise_minutes: stat.exercise_minutes,
+                    workouts_count: stat.workouts_count,
                     profile: profile
                 )
             }
@@ -102,9 +117,18 @@ struct LeaderboardView: View {
     
     var body: some View {
         VStack {
+            Picker("Metric", selection: $viewModel.selectedMetric) {
+                ForEach(HealthMetric.allCases) { metric in
+                    Text(metric.displayName).tag(metric)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.top)
+            
             Text("Today's Leaderboard")
                 .font(.headline)
-                .padding(.top)
+                .padding(.top, 8)
             
             if viewModel.isLoading {
                 ProgressView()
@@ -121,13 +145,13 @@ struct LeaderboardView: View {
                             Text("#\(index + 1)")
                                 .font(.headline)
                                 .fontWeight(.bold)
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(viewModel.selectedMetric.color)
                                 .frame(width: 40)
                             
                             VStack(alignment: .leading) {
                                 Text(entry.profile?.display_name ?? entry.profile?.email ?? "Unknown")
                                     .fontWeight(.semibold)
-                                Text("\(entry.steps) steps")
+                                Text(detailText(for: entry))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
@@ -135,17 +159,24 @@ struct LeaderboardView: View {
                             Spacer()
                             
                             // Visualize relative progress
-                            if let maxSteps = viewModel.entries.first?.steps, maxSteps > 0 {
-                                let progress = Double(entry.steps) / Double(maxSteps)
+                            let maxVal = getMetricValue(for: viewModel.entries.first!)
+                            if maxVal > 0 {
+                                let currentVal = getMetricValue(for: entry)
+                                let progress = currentVal / maxVal
                                 Circle()
                                     .trim(from: 0, to: progress)
-                                    .stroke(Color.blue, lineWidth: 4)
+                                    .stroke(viewModel.selectedMetric.color, lineWidth: 4)
                                     .frame(width: 30, height: 30)
                                     .rotationEffect(.degrees(-90))
                                     .overlay {
-                                        Text("🏆")
-                                            .font(.caption2)
-                                            .opacity(index == 0 ? 1 : 0)
+                                        if index == 0 {
+                                            Text("🏆")
+                                                .font(.caption2)
+                                        } else {
+                                            Image(systemName: viewModel.selectedMetric.icon)
+                                                .font(.caption2)
+                                                .foregroundStyle(viewModel.selectedMetric.color)
+                                        }
                                     }
                             }
                         }
@@ -159,6 +190,28 @@ struct LeaderboardView: View {
         }
         .refreshable {
             await viewModel.fetchLeaderboard(for: familyId)
+        }
+    }
+    
+    private func getMetricValue(for entry: LeaderboardEntry) -> Double {
+        switch viewModel.selectedMetric {
+        case .steps: return Double(entry.steps)
+        case .calories: return Double(entry.calories)
+        case .distance: return entry.distance
+        case .flights: return Double(entry.flights)
+        case .exercise: return Double(entry.exercise_minutes)
+        case .workouts: return Double(entry.workouts_count)
+        }
+    }
+    
+    private func detailText(for entry: LeaderboardEntry) -> String {
+        let value = getMetricValue(for: entry)
+        let unit = viewModel.selectedMetric.unit
+        
+        if viewModel.selectedMetric == .distance {
+             return String(format: "%.2f %@", value, unit)
+        } else {
+             return String(format: "%.0f %@", value, unit)
         }
     }
 }
