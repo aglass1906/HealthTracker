@@ -18,11 +18,16 @@ class HealthDataStore: ObservableObject {
     @Published var lastSyncDate: Date?
     @Published var shouldShowImportPrompt = false
     @Published var lastErrorMessage: String? // Debugging aid
+    @Published var newlyFinishedWorkout: WorkoutData?
+    
+    // Internal state
+    private var lastSeenWorkoutIDs: Set<String> = []
     
     private let healthKitManager = HealthKitManager.shared
     private let userDefaults = UserDefaults.standard
     private let dataKey = "healthTracker_dailyData"
     private let lastSyncKey = "healthTracker_lastSync"
+    private let lastSeenWorkoutsKey = "healthTracker_lastSeenWorkouts"
     private let hasImportedKey = "healthTracker_hasImported"
     
     private init() {
@@ -41,6 +46,10 @@ class HealthDataStore: ObservableObject {
             lastSyncDate = syncDate
         }
         
+        if let savedIDs = userDefaults.array(forKey: lastSeenWorkoutsKey) as? [String] {
+            lastSeenWorkoutIDs = Set(savedIDs)
+        }
+        
         // Load today's data if available
         let today = Calendar.current.startOfDay(for: Date())
         todayData = allDailyData.first { Calendar.current.isDate($0.date, inSameDayAs: today) }
@@ -50,6 +59,10 @@ class HealthDataStore: ObservableObject {
         if let encoded = try? JSONEncoder().encode(allDailyData) {
             userDefaults.set(encoded, forKey: dataKey)
         }
+        
+        let ids = Array(lastSeenWorkoutIDs)
+        userDefaults.set(ids, forKey: lastSeenWorkoutsKey)
+        
         userDefaults.set(Date(), forKey: lastSyncKey)
         lastSyncDate = Date()
     }
@@ -325,6 +338,13 @@ class HealthDataStore: ObservableObject {
                                 updated.workouts = workouts
                                 updated.activityRings = rings
                                 updatedData.append(updated)
+                                
+                                // Track seen workouts
+                                for workout in workouts {
+                                    if !lastSeenWorkoutIDs.contains(workout.id) {
+                                        lastSeenWorkoutIDs.insert(workout.id)
+                                    }
+                                }
                             } catch {
                                 updatedData.append(data)
                             }

@@ -115,17 +115,37 @@ class SocialFeedManager {
     // MARK: - Workout Check
     
     func checkAndPostWorkout(workout: WorkoutData, familyId: UUID) {
-        // Use a unique key for this workout (e.g. start time + type)
-        // Ideally we'd use UUID but WorkoutData might trigger from HK where UUIDs are persistent.
-        // Let's use start date string as key + type.
         let key = "posted_workout_\(workout.startDate.timeIntervalSince1970)_\(workout.workoutType)"
         
         if UserDefaults.standard.bool(forKey: key) { return }
         
+        var payload: [String: String] = [
+            "workout_type": workout.workoutType,
+            "duration": formatDuration(workout.duration),
+            "duration_seconds": String(workout.duration)
+        ]
+        
+        if let calories = workout.totalEnergyBurned {
+            payload["calories"] = String(format: "%.0f", calories)
+        }
+        
+        if let distance = workout.totalDistance {
+            payload["distance"] = String(format: "%.2f", distance / 1000) // km
+        }
+        
         Task {
-            await post(type: .workout_finished, familyId: familyId)
+            await post(type: .workout_finished, familyId: familyId, payload: payload)
             UserDefaults.standard.set(true, forKey: key)
         }
+    }
+    
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let hours = Int(duration) / 3600
+        let minutes = Int(duration) / 60 % 60
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+        return "\(minutes)m"
     }
     
     // MARK: - Round Winner

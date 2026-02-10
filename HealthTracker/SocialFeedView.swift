@@ -104,109 +104,8 @@ struct SocialFeedView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(viewModel.events) { event in
-                            HStack(alignment: .top) {
-                                Image(systemName: "person.circle.fill")
-                                    .font(.title)
-                                    .foregroundStyle(.blue)
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack {
-                                        Text(event.profile?.display_name ?? "Someone")
-                                            .fontWeight(.bold)
-                                        Text(verbatim: timeAgo(from: event.created_at))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    
-                                    Text(description(for: event))
-                                        .font(.body)
-                                    
-                                    // Rich Payload Display
-                                    if let payload = event.payload, !payload.isEmpty {
-                                        if event.type == "challenge_created" || event.type == "challenge_updated" {
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                if let title = payload["title"] {
-                                                    Text(title)
-                                                        .font(.headline)
-                                                        .foregroundStyle(.primary)
-                                                }
-                                                if let goal = payload["goal"] {
-                                                    Text("Goal: \(goal)")
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
-                                                }
-                                            }
-                                            .padding(8)
-                                            .background(Color.blue.opacity(0.1))
-                                            .cornerRadius(8)
-                                            .padding(.top, 4)
-                                        } else if event.type == "goal_met" {
-                                            HStack {
-                                                if let goalType = payload["goal"], let value = payload["value"] {
-                                                    Image(systemName: iconForGoal(goalType))
-                                                        .foregroundStyle(colorForGoal(goalType))
-                                                    Text("\(goalType): \(value)")
-                                                        .font(.subheadline)
-                                                        .fontWeight(.medium)
-                                                }
-                                            }
-                                             .padding(8)
-                                            .background(Color(.secondarySystemBackground))
-                                            .cornerRadius(8)
-                                            .padding(.top, 4)
-                                        } else if event.type == "round_winner" {
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                if let challengeTitle = payload["challenge_title"] {
-                                                    HStack {
-                                                        Image(systemName: "trophy.fill")
-                                                            .foregroundStyle(.yellow)
-                                                        Text(challengeTitle)
-                                                            .font(.headline)
-                                                            .foregroundStyle(.primary)
-                                                    }
-                                                }
-                                                if let roundNumber = payload["round_number"] {
-                                                    Text("Round \(roundNumber) Winner")
-                                                        .font(.subheadline)
-                                                        .fontWeight(.semibold)
-                                                        .foregroundStyle(.yellow)
-                                                }
-                                            }
-                                            .padding(8)
-                                            .background(Color.yellow.opacity(0.1))
-                                            .cornerRadius(8)
-                                            .padding(.top, 4)
-                                        } else if event.type == "challenge_won" {
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                if let challengeTitle = payload["challenge_title"] {
-                                                    HStack {
-                                                        Image(systemName: "trophy.fill")
-                                                            .foregroundStyle(.yellow)
-                                                        Text(challengeTitle)
-                                                            .font(.headline)
-                                                            .foregroundStyle(.primary)
-                                                    }
-                                                }
-                                                if let metric = payload["metric"], let value = payload["value"] {
-                                                    Text("\(value) \(metric)")
-                                                        .font(.subheadline)
-                                                        .fontWeight(.semibold)
-                                                        .foregroundStyle(.yellow)
-                                                }
-                                            }
-                                            .padding(8)
-                                            .background(Color.yellow.opacity(0.15))
-                                            .cornerRadius(8)
-                                            .padding(.top, 4)
-                                        }
-                                    }
-                                }
-                                Spacer()
-                            }
-                            .padding()
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(12)
-                            .padding(.horizontal)
+                            SocialFeedItem(event: event)
+                                .padding(.horizontal)
                         }
                     }
                 }
@@ -217,67 +116,303 @@ struct SocialFeedView: View {
         }
     }
     
-    func description(for event: SocialEvent) -> String {
-        switch event.type {
-        case "workout_finished":
-            return "finished a workout! 💪"
-        case "goal_met":
-            return "hit a daily goal! 🎯"
-        case "challenge_won":
-            if let challengeTitle = event.payload?["challenge_title"] {
-                return "won \(challengeTitle)! 🏆"
+}
+
+// MARK: - Helpers
+
+private func iconForGoal(_ type: String) -> String {
+    switch type {
+    case "Steps": return "figure.walk"
+    case "Calories": return "flame.fill"
+    case "Flights": return "stairs"
+    case "Distance": return "map.fill"
+    default: return "star.fill"
+    }
+}
+
+private func colorForGoal(_ type: String) -> Color {
+    switch type {
+    case "Steps": return .blue
+    case "Calories": return .orange
+    case "Flights": return .purple
+    case "Distance": return .green
+    default: return .yellow
+    }
+}
+
+struct SocialFeedItem: View {
+    let event: SocialEvent
+    @State private var selectedWorkout: WorkoutData?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header
+            HStack(spacing: 12) {
+                // Avatar
+                if let avatarUrl = event.profile?.avatar_url, let url = URL(string: avatarUrl) {
+                    AsyncImage(url: url) { image in
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
+                    } placeholder: {
+                        Image(systemName: "person.circle.fill")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.gray.opacity(0.3))
+                    }
+                } else {
+                    Image(systemName: "person.circle.fill")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.gray.opacity(0.3))
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(event.profile?.display_name ?? "Someone")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    
+                    Text(timeAgo)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                
+                Spacer()
+                
+                // Icon based on type
+                Image(systemName: iconName)
+                    .font(.title3)
+                    .foregroundStyle(iconColor)
             }
-            return "won a challenge! 🏆"
-        case "challenge_created":
-            return "created a new challenge! ⚔️"
-        case "challenge_updated":
-            return "updated the challenge details. 📝"
+            
+            // Content
+            Text(description)
+                .font(.body)
+                .foregroundStyle(.secondary)
+            
+            // Payload Display
+            if let payload = event.payload {
+                if event.type == "workout_finished" {
+                    workoutStatsView(payload: payload)
+                } else if event.type == "goal_met" {
+                    HStack {
+                        Image(systemName: "trophy.fill")
+                            .foregroundStyle(.yellow)
+                        Text(payload["goal"] ?? "Goal")
+                            .fontWeight(.bold)
+                        Spacer()
+                        Text(payload["value"] ?? "")
+                            .font(.headline)
+                    }
+                    .padding()
+                    .background(Color.yellow.opacity(0.1))
+                    .cornerRadius(12)
+                } else if event.type == "round_winner" {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(payload["challenge_title"] ?? "")
+                            .font(.headline)
+                        
+                        HStack {
+                            Image(systemName: "crown.fill")
+                                .foregroundStyle(.yellow)
+                            Text("Round \(payload["round_number"] ?? "1") Winner")
+                                .font(.subheadline)
+                                .fontWeight(.bold)
+                        }
+                        
+                        HStack {
+                            Text("Winner:")
+                                .foregroundStyle(.secondary)
+                            Text(payload["winner_name"] ?? "")
+                                .fontWeight(.bold)
+                        }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.purple.opacity(0.1))
+                    .cornerRadius(12)
+                } else if event.type == "challenge_updated",
+                          let title = payload["title"],
+                          let status = payload["status"] {
+                    HStack {
+                        Image(systemName: "flag.checkered")
+                            .foregroundStyle(.blue)
+                        VStack(alignment: .leading) {
+                            Text(title)
+                                .fontWeight(.semibold)
+                            Text("Status: \(status.capitalized)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(12)
+                } else if event.type == "challenge_won" {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let challengeTitle = payload["challenge_title"] {
+                            HStack {
+                                Image(systemName: "trophy.fill")
+                                    .foregroundStyle(.yellow)
+                                Text(challengeTitle)
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                            }
+                        }
+                        if let metric = payload["metric"], let value = payload["value"] {
+                            Text("\(value) \(metric)")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.yellow)
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.yellow.opacity(0.15))
+                    .cornerRadius(8)
+                    .padding(.top, 4)
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color(.systemGray4), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .onTapGesture {
+            if event.type == "workout_finished" {
+                selectedWorkout = reconstructWorkout(from: event.payload)
+            }
+        }
+        .sheet(item: $selectedWorkout) { workout in
+            WorkoutSummaryView(workout: workout, profile: event.profile)
+        }
+    }
+    
+    private func workoutStatsView(payload: [String: String]) -> some View {
+        HStack(spacing: 16) {
+            if let duration = payload["duration"] {
+                Label(duration, systemImage: "clock")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            if let calories = payload["calories"] {
+                Label("\(calories) kcal", systemImage: "flame.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
+            if let distance = payload["distance"] {
+                Label("\(distance) km", systemImage: "location.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.top, 4)
+    }
+    
+    private func reconstructWorkout(from payload: [String: String]?) -> WorkoutData? {
+        guard let payload = payload,
+              let type = payload["workout_type"] else { return nil }
+        
+        let date = ISO8601DateFormatter().date(from: event.created_at) ?? Date()
+        
+        // Parse duration
+        var duration: TimeInterval = 0
+        if let seconds = payload["duration_seconds"], let doubleVal = Double(seconds) {
+            duration = doubleVal
+        } else if let durationStr = payload["duration"] {
+             // Fallback: Try to parse "1h 30m" or "45m"
+             // This is a rough parser for backward compatibility
+             let components = durationStr.components(separatedBy: " ")
+             for comp in components {
+                 if comp.contains("h"), let val = Double(comp.replacingOccurrences(of: "h", with: "")) {
+                     duration += val * 3600
+                 } else if comp.contains("m"), let val = Double(comp.replacingOccurrences(of: "m", with: "")) {
+                     duration += val * 60
+                 }
+             }
+        }
+        
+        return WorkoutData(
+            id: UUID().uuidString,
+            workoutType: type,
+            startDate: date,
+            endDate: date.addingTimeInterval(duration),
+            duration: duration,
+            totalEnergyBurned: Double(payload["calories"] ?? "0"),
+            totalDistance: (Double(payload["distance"] ?? "0") ?? 0) * 1000
+        )
+    }
+    
+    var timeAgo: String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: ISO8601DateFormatter().date(from: event.created_at) ?? Date(), relativeTo: Date())
+    }
+    
+    var description: String {
+        switch event.type {
         case "joined_family":
-            return "joined the family! 👋"
+            return "joined the family!"
+        case "challenge_created":
+            return "created a new challenge!"
+        case "challenge_won":
+            return "won the challenge! 🏆"
+        case "round_winner":
+            return "won a round! 🥇"
+        case "goal_met":
+            return "crushed a goal! 🎯"
+        case "workout_finished":
+            if let type = event.payload?["workout_type"] {
+                return "finished a \(type) workout! 💪"
+            }
+            return "finished a workout! 💪"
         case "ring_closed_move":
-            return "closed their Move ring! 🔥"
+            return "closed their Move ring! 🔴"
         case "ring_closed_exercise":
             return "closed their Exercise ring! 🟢"
         case "ring_closed_stand":
             return "closed their Stand ring! 🔵"
-        case "round_winner":
-            return "won a challenge round! 🏆"
+        case "challenge_updated":
+            return "updated a challenge 🔄"
         default:
             return "did something cool."
         }
     }
     
-    func timeAgo(from isoString: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = formatter.date(from: isoString) else { return "recently" }
-        
-        let diff = Date().timeIntervalSince(date)
-        if diff < 60 { return "just now" }
-        if diff < 3600 { return "\(Int(diff / 60))m ago" }
-        if diff < 86400 { return "\(Int(diff / 3600))h ago" }
-        return "\(Int(diff / 86400))d ago"
-    }
-    
-    // MARK: - Helpers
-    
-    func iconForGoal(_ type: String) -> String {
-        switch type {
-        case "Steps": return "figure.walk"
-        case "Calories": return "flame.fill"
-        case "Flights": return "stairs"
-        case "Distance": return "map.fill"
+    var iconName: String {
+        switch event.type {
+        case "joined_family": return "person.2.fill"
+        case "challenge_created": return "flag.checkered"
+        case "challenge_won": return "trophy.fill"
+        case "round_winner": return "medal.fill"
+        case "goal_met": return "target"
+        case "workout_finished": return "figure.run"
+        case "ring_closed_move": return "circle.fill"
+        case "ring_closed_exercise": return "circle.fill"
+        case "ring_closed_stand": return "circle.fill"
+        case "challenge_updated": return "arrow.triangle.2.circlepath"
         default: return "star.fill"
         }
     }
     
-    func colorForGoal(_ type: String) -> Color {
-        switch type {
-        case "Steps": return .blue
-        case "Calories": return .orange
-        case "Flights": return .purple
-        case "Distance": return .green
-        default: return .yellow
+    var iconColor: Color {
+        switch event.type {
+        case "joined_family": return .blue
+        case "challenge_created": return .purple
+        case "challenge_won": return .yellow
+        case "goal_met": return .green
+        case "workout_finished": return .orange
+        case "ring_closed_move": return .red
+        case "ring_closed_exercise": return .green
+        case "ring_closed_stand": return .blue
+        case "challenge_updated": return .cyan
+        default: return .gray
         }
     }
 }

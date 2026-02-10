@@ -19,6 +19,8 @@ struct ContentView: View {
     @State private var pendingAuthorization = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     
+    @Environment(\.scenePhase) var scenePhase
+
     var body: some View {
         Group {
             if authManager.isAuthenticated {
@@ -61,6 +63,18 @@ struct ContentView: View {
                         // Import latest data on app startup
                         await dataStore.importLatestData()
                     }
+                    .onChange(of: scenePhase) { newPhase in
+                        if newPhase == .active {
+                            Task {
+                                await dataStore.importLatestData()
+                            }
+                        }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+                        Task {
+                            await dataStore.importLatestData()
+                        }
+                    }
                     .onChange(of: healthKitManager.isAuthorized) { oldValue, newValue in
                         // When authorization changes to true, check if we should prompt for import
                         if newValue && !oldValue && !dataStore.hasImportedData {
@@ -89,6 +103,7 @@ struct DashboardView: View {
     @StateObject private var dataStore = HealthDataStore.shared
     @StateObject private var healthKitManager = HealthKitManager.shared
     @State private var showingDailySummary = false
+    @State private var selectedWorkout: WorkoutData?
     
     var body: some View {
         NavigationStack {
@@ -145,6 +160,9 @@ struct DashboardView: View {
                             VStack(spacing: 12) {
                                 ForEach(workouts.prefix(5)) { workout in
                                     WorkoutRow(workout: workout)
+                                        .onTapGesture {
+                                            selectedWorkout = workout
+                                        }
                                 }
                             }
                             .padding(.horizontal)
@@ -282,6 +300,12 @@ struct DashboardView: View {
             }
             .sheet(isPresented: $showingDailySummary) {
                 DailySummaryView(date: Date())
+            }
+            .sheet(item: $dataStore.newlyFinishedWorkout) { workout in
+                WorkoutSummaryView(workout: workout, profile: nil) // Current user
+            }
+            .sheet(item: $selectedWorkout) { workout in
+                WorkoutSummaryView(workout: workout, profile: nil)
             }
             .overlay {
                 if dataStore.isLoading {
