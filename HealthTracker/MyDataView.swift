@@ -207,11 +207,11 @@ struct MyDataView: View {
                                     }
                             }
                         }
-                        .frame(height: 250)
+                        .frame(height: 180)
                         .padding(.horizontal)
                     } else {
                         ContentUnavailableView("No Data", systemImage: "chart.bar.xaxis", description: Text("No data available for this time range."))
-                            .frame(height: 250)
+                            .frame(height: 180)
                     }
                     
                     // List
@@ -236,7 +236,7 @@ struct MyDataView: View {
                                     } label: {
                                         HStack {
                                             VStack(alignment: .leading) {
-                                                Text(data.date.formatted(date: .abbreviated, time: .omitted))
+                                                Text(data.date.formatted(Date.FormatStyle().weekday(.abbreviated).month().day()))
                                                     .font(.body)
                                                     .fontWeight(.medium)
                                             }

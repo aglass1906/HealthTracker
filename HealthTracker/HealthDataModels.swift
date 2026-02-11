@@ -157,3 +157,23 @@ struct DailyHealthGoals {
 }
 
 
+
+// MARK: - User Profile
+
+struct Profile: Codable, Identifiable {
+    let id: UUID
+    let email: String?
+    let display_name: String?
+    let avatar_url: String?
+    let family_id: UUID?
+    let is_admin: Bool?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case email
+        case display_name
+        case avatar_url
+        case family_id
+        case is_admin
+    }
+}

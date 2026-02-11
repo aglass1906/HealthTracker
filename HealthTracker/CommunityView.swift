@@ -15,14 +15,7 @@ struct Family: Codable, Identifiable {
     let invite_code: String
 }
 
-struct Profile: Codable, Identifiable {
-    let id: UUID
-    let email: String?
-    let display_name: String?
-    let avatar_url: String?
-    let family_id: UUID?
-    // We will join daily_stats here usually, but keeping it simple for now
-}
+
 
 @MainActor
 class FamilyViewModel: ObservableObject {

@@ -750,6 +750,14 @@ struct ProfileView: View {
                     SettingsRow(icon: "questionmark.circle.fill", title: "Help & Support", color: .gray)
                 }
                 
+                if currentProfile?.is_admin == true {
+                    Section("Admin") {
+                        NavigationLink(destination: AdminUserListView()) {
+                            Label("Admin Panel", systemImage: "shield.checkerboard")
+                        }
+                    }
+                }
+                
                 Section("Developer") {
                     Button {
                         // Reset Flow

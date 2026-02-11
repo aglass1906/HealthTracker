@@ -1,0 +1,4 @@
+# Rules
+
+- **Always Build:** After making code changes, always run the build command to verify correctness.
+- **Fix Immediately:** If a build fails, prioritize fixing the errors before moving on to other tasks.
