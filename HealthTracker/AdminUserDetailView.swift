@@ -6,10 +6,11 @@
 //
 
 import SwiftUI
+import Combine
 
 struct AdminUserDetailView: View {
     let user: AdminManager.AdminUser
-    @StateObject private var adminManager = AdminManager.shared
+    @ObservedObject private var adminManager = AdminManager.shared
     @State private var newPassword = ""
     @State private var successMessage: String?
     

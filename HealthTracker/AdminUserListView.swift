@@ -6,9 +6,10 @@
 //
 
 import SwiftUI
+import Combine
 
 struct AdminUserListView: View {
-    @StateObject private var adminManager = AdminManager.shared
+    @ObservedObject private var adminManager = AdminManager.shared
     @State private var users: [AdminManager.AdminUser] = []
     
     var body: some View {
