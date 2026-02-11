@@ -28,7 +28,7 @@ struct OnboardingView: View {
             VStack {
                 // Progress Indicator
                 HStack(spacing: 8) {
-                    ForEach(0..<3) { index in
+                    ForEach(0..<4) { index in
                         Capsule()
                             .fill(index == currentStep ? Color.blue : Color.gray.opacity(0.3))
                             .frame(width: index == currentStep ? 20 : 8, height: 8)
@@ -50,11 +50,17 @@ struct OnboardingView: View {
                     }
                     .tag(1)
                     
-                    // Step 3: Family
+                    // Step 3: Notifications
+                    NotificationPermissionStep {
+                        nextStep()
+                    }
+                    .tag(2)
+                    
+                    // Step 4: Family
                     FamilySetupStep(familyViewModel: familyViewModel) {
                         completeOnboarding()
                     }
-                    .tag(2)
+                    .tag(3)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(.easeInOut, value: currentStep)
@@ -224,7 +230,94 @@ struct HealthPermissionStep: View {
     }
 }
 
-// MARK: - Step 3: Family Setup
+// MARK: - Step 3: Notification Permissions
+struct NotificationPermissionStep: View {
+    @StateObject private var briefingManager = MorningBriefingManager.shared
+    var onNext: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 30) {
+            Spacer()
+            
+            Image(systemName: "bell.badge.fill")
+                .font(.system(size: 100))
+                .foregroundStyle(.orange)
+                .symbolEffect(.bounce)
+            
+            VStack(spacing: 12) {
+                Text("Morning Briefing")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                
+                Text("Wake up to a summary of yesterday's activity. We'll send you a quick alert to start your day.")
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+            }
+            
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 15) {
+                    Image(systemName: "moon.stars.fill")
+                        .foregroundStyle(.purple)
+                    Text("Syncs while you sleep")
+                        .font(.headline)
+                }
+                HStack(spacing: 15) {
+                    Image(systemName: "sun.max.fill")
+                        .foregroundStyle(.yellow)
+                    Text("Ready when you wake up")
+                        .font(.headline)
+                }
+                HStack(spacing: 15) {
+                    Image(systemName: "chart.bar.doc.horizontal.fill")
+                        .foregroundStyle(.blue)
+                    Text("Direct link to your stats")
+                        .font(.headline)
+                }
+            }
+            .padding(.horizontal, 32)
+            
+            Spacer()
+            
+            VStack(spacing: 12) {
+                Button {
+                    Task {
+                        let granted = await NotificationManager.shared.requestAuthorization()
+                        if granted {
+                            await MainActor.run {
+                                briefingManager.isNotificationsEnabled = true
+                                briefingManager.rescheduleNotification()
+                                onNext()
+                            }
+                        } else {
+                            await MainActor.run {
+                                onNext()
+                            }
+                        }
+                    }
+                } label: {
+                    Text("Enable Morning Summary")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .cornerRadius(16)
+                }
+                
+                Button("Maybe Later") {
+                    onNext()
+                }
+                .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 32)
+            .padding(.bottom, 50)
+        }
+    }
+}
+
+// MARK: - Step 4: Family Setup
 struct FamilySetupStep: View {
     @ObservedObject var familyViewModel: FamilyViewModel
     var onComplete: () -> Void

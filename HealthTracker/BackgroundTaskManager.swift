@@ -170,6 +170,11 @@ class BackgroundTaskManager {
             await SyncManager.shared.syncWorkouts(workouts: workoutsValue)
             await SyncManager.shared.syncRings(rings: ringsValue)
             
+            // 5. Update Morning Briefing Notification
+            let briefingManager = MorningBriefingManager.shared
+            briefingManager.checkBriefingStatus()
+            briefingManager.rescheduleNotification()
+            
             print("✅ Background sync completed - Steps: \(Int(todayData.steps)), Calories: \(Int(todayData.calories))")
         } catch {
             print("❌ Background sync failed: \(error)")

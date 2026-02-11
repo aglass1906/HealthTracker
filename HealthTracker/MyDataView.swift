@@ -113,15 +113,19 @@ struct MyDataView: View {
                          }
                          .disabled(selectedScope == .custom)
                         
-                        Text(dateRangeLabel)
-                             .font(.headline)
-                             .frame(maxWidth: .infinity)
-                             .onTapGesture {
-                                 // Allow tapping to pick custom range if we want, or rely on picker
-                                 if selectedScope == .custom {
-                                     showingCustomRange = true
-                                 }
-                             }
+                        if selectedScope == .custom {
+                            Text(dateRangeLabel)
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .onTapGesture {
+                                    showingCustomRange = true
+                                }
+                        } else {
+                            DatePicker("Select Date", selection: $referenceDate, in: ...Date(), displayedComponents: .date)
+                                .labelsHidden()
+                                .datePickerStyle(.compact)
+                                .frame(maxWidth: .infinity)
+                        }
                         
                          Button(action: { moveDate(by: 1) }) {
                              Image(systemName: "chevron.right")

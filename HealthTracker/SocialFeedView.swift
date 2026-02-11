@@ -91,6 +91,7 @@ class SocialFeedViewModel: ObservableObject {
 struct SocialFeedView: View {
     let familyId: UUID
     @StateObject private var viewModel = SocialFeedViewModel()
+    @StateObject private var briefingManager = MorningBriefingManager.shared
     
     var body: some View {
         VStack(alignment: .leading) {
@@ -122,6 +123,15 @@ struct SocialFeedView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 12) {
+                        if briefingManager.shouldShowBriefing, let data = briefingManager.briefingData {
+                            MorningBriefingView(data: data) {
+                                withAnimation {
+                                    briefingManager.dismissBriefing()
+                                }
+                            }
+                            .padding(.top, 8)
+                        }
+                        
                         ForEach(viewModel.events) { event in
                             SocialFeedItem(event: event)
                                 .padding(.horizontal)

@@ -16,6 +16,7 @@ struct ContentView: View {
     @StateObject private var dataStore = HealthDataStore.shared
     @StateObject private var healthKitManager = HealthKitManager.shared
     @State private var showingImportAlert = false
+    @State private var showingEditProfile = false
     @State private var pendingAuthorization = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     
@@ -615,6 +616,7 @@ struct ProfileView: View {
     @StateObject private var healthKitManager = HealthKitManager.shared
     @StateObject private var dataStore = HealthDataStore.shared
     @StateObject private var authManager = AuthManager.shared
+    @StateObject private var briefingManager = MorningBriefingManager.shared
     @State private var showingAuthorization = false
     @State private var showingUnauthorizeAlert = false
     @State private var showingSettingsAlert = false
@@ -748,6 +750,22 @@ struct ProfileView: View {
                 Section {
                     SettingsRow(icon: "info.circle.fill", title: "About", color: .gray)
                     SettingsRow(icon: "questionmark.circle.fill", title: "Help & Support", color: .gray)
+                }
+                
+                Section("Notifications") {
+                    Toggle(isOn: $briefingManager.isNotificationsEnabled) {
+                        Label {
+                            Text("Morning Briefing")
+                        } icon: {
+                            Image(systemName: "bell.fill")
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    
+                    if briefingManager.isNotificationsEnabled {
+                        DatePicker("Delivery Time", selection: $briefingManager.preferredTime, displayedComponents: .hourAndMinute)
+                            .tint(.blue)
+                    }
                 }
                 
                 if currentProfile?.is_admin == true {
