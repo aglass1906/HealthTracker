@@ -31,7 +31,18 @@ struct ChallengesListView: View {
                 .padding(.top, 40)
             } else {
                 List {
-                    ForEach(viewModel.activeChallenges) { challenge in
+                    Section {
+                        Picker("Filter", selection: $viewModel.selectedFilter) {
+                            ForEach(ChallengeViewModel.ChallengeFilter.allCases) { filter in
+                                Text(filter.rawValue).tag(filter)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .listRowInsets(EdgeInsets())
+                        .padding(.vertical, 8)
+                    }
+                    
+                    ForEach(viewModel.filteredChallenges) { challenge in
                         NavigationLink(destination: ChallengeDetailView(challenge: challenge)) {
                             HStack {
                                 Image(systemName: challenge.metric.icon)
@@ -48,19 +59,46 @@ struct ChallengesListView: View {
                                     Text(challengeDescription(for: challenge))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                    
+                                    if !challenge.start_date_string.isEmpty {
+                                        Text("\(formattedDate(challenge.start_date)) - \(formattedDate(challenge.end_date ?? Date()))")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
                                 
                                 Spacer()
                                 
-                                if challenge.isEnded {
-                                    Text("ENDED")
+                                if !challenge.isEnded {
+                                    Text("ACTIVE")
                                         .font(.caption2)
                                         .fontWeight(.bold)
                                         .foregroundStyle(.white)
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 4)
-                                        .background(Color.gray)
+                                        .background(Color.green)
                                         .cornerRadius(4)
+                                } else {
+                                    // Check if recent (ended < 7 days ago)
+                                    if let endDate = challenge.end_date, endDate >= Calendar.current.date(byAdding: .day, value: -7, to: Date())! {
+                                        Text("RECENT")
+                                            .font(.caption2)
+                                            .fontWeight(.bold)
+                                            .foregroundStyle(.white)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(Color.orange)
+                                            .cornerRadius(4)
+                                    } else {
+                                        Text("ENDED")
+                                            .font(.caption2)
+                                            .fontWeight(.bold)
+                                            .foregroundStyle(.white)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(Color.gray)
+                                            .cornerRadius(4)
+                                    }
                                 }
                             }
                             .padding(.vertical, 4)
@@ -77,6 +115,12 @@ struct ChallengesListView: View {
     }
     
     // MARK: - Helper
+    
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date)
+    }
     
     private func challengeDescription(for challenge: Challenge) -> String {
         var parts: [String] = []

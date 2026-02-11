@@ -38,6 +38,86 @@ class ChallengeViewModel: ObservableObject {
     @Published var currentRoundParticipants: [RoundParticipant] = []
     @Published var roundWinCounts: [UUID: Int] = [:] // user_id -> win count
     @Published var currentRoundStats: [ChallengeParticipant] = []
+    
+    @Published var selectedFilter: ChallengeFilter = .all
+    
+    enum ChallengeFilter: String, CaseIterable, Identifiable {
+        case all = "All"
+        case active = "Active"
+        case recent = "Recent"
+        case ended = "Ended"
+        
+        var id: String { rawValue }
+    }
+    
+    var filteredChallenges: [Challenge] {
+        let now = Date()
+        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: now)!
+        
+        // Helper to categorize
+        func isRecent(_ challenge: Challenge) -> Bool {
+            guard let endDate = challenge.end_date else { return false } // No end date = active forever?
+            return challenge.isEnded && endDate >= sevenDaysAgo
+        }
+        
+        func isActive(_ challenge: Challenge) -> Bool {
+            return !challenge.isEnded
+        }
+        
+        func isEndedLegacy(_ challenge: Challenge) -> Bool {
+            guard let endDate = challenge.end_date else { return false }
+            return challenge.isEnded && endDate < sevenDaysAgo
+        }
+        
+        let filtered: [Challenge]
+        
+        switch selectedFilter {
+        case .all:
+            filtered = activeChallenges
+        case .active:
+            filtered = activeChallenges.filter { isActive($0) }
+        case .recent:
+            filtered = activeChallenges.filter { isRecent($0) }
+        case .ended:
+            filtered = activeChallenges.filter { isEndedLegacy($0) }
+        }
+        
+        // Sort: Active (end asc) -> Recent (end desc) -> Ended (end desc)
+        return filtered.sorted { c1, c2 in
+            // 1. Primary Sort: Category (Active < Recent < Ended)
+            let score1 = score(c1)
+            let score2 = score(c2)
+            
+            if score1 != score2 {
+                return score1 < score2
+            }
+            
+            // 2. Secondary Sort: Date
+            let end1 = c1.end_date ?? Date.distantFuture
+            let end2 = c2.end_date ?? Date.distantFuture
+            
+            if !c1.isEnded {
+                // Active: Ending soonest first
+                return end1 < end2
+            } else {
+                // Ended/Recent: Most recently ended first
+                return end1 > end2
+            }
+        }
+    }
+    
+    private func score(_ challenge: Challenge) -> Int {
+        let now = Date()
+        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: now)!
+        
+        if !challenge.isEnded {
+            return 0 // Active
+        } else if let endDate = challenge.end_date, endDate >= sevenDaysAgo {
+            return 1 // Recent
+        } else {
+            return 2 // Ended
+        }
+    }
 
     
     let client = AuthManager.shared.client
