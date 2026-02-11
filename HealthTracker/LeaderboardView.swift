@@ -126,7 +126,7 @@ struct LeaderboardView: View {
             .padding(.horizontal)
             .padding(.top)
             
-            Text("Today's Leaderboard")
+            Text("Today's \(viewModel.selectedMetric.displayName) Leaderboard")
                 .font(.headline)
                 .padding(.top, 8)
             
