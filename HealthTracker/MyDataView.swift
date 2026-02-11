@@ -140,140 +140,11 @@ struct MyDataView: View {
                         .font(.subheadline)
                     }
 
-                    // Summary Section (Metric Selector + Big Number)
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Menu {
-                                ForEach(HealthMetric.allCases) { metric in
-                                    Button {
-                                        selectedMetric = metric
-                                    } label: {
-                                        Label(metric.rawValue, systemImage: metric.icon)
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Text(selectedMetric.rawValue)
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                    Image(systemName: "chevron.down")
-                                        .font(.headline)
-                                }
-                                .foregroundStyle(selectedMetric.color)
-                            }
-                            
-                            Spacer()
-                            
-                            VStack(alignment: .trailing) {
-                                Text("TOTAL")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(formatValue(totalValue, metric: selectedMetric))
-                                    .font(.headline)
-                                    .fontWeight(.bold)
-                            }
-                            
-                            VStack(alignment: .trailing) {
-                                Text("AVG")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                Text(formatValue(averageValue, metric: selectedMetric))
-                                    .font(.headline)
-                                    .fontWeight(.bold)
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
+                    summarySection
                     
-                    // Chart
-                    if !filteredData.isEmpty {
-                        Chart {
-                            ForEach(filteredData) { data in
-                                BarMark(
-                                    x: .value("Date", data.date, unit: .day),
-                                    y: .value(selectedMetric.rawValue, getValue(for: data, metric: selectedMetric))
-                                )
-                                .foregroundStyle(selectedMetric.color.gradient)
-                            }
-                            
-                            if !filteredData.isEmpty {
-                                RuleMark(y: .value("Average", averageValue))
-                                    .foregroundStyle(.gray.opacity(0.5))
-                                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [5]))
-                                    .annotation(position: .leading, alignment: .bottom) {
-                                        Text("Avg")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                    }
-                            }
-                        }
-                        .frame(height: 180)
-                        .padding(.horizontal)
-                    } else {
-                        ContentUnavailableView("No Data", systemImage: "chart.bar.xaxis", description: Text("No data available for this time range."))
-                            .frame(height: 180)
-                    }
+                    chartSection
                     
-                    // List
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(selectedScope == .day ? "Details" : "Daily Breakdown")
-                            .font(.headline)
-                            .padding(.horizontal)
-                            .padding(.bottom, 8)
-                        
-                        
-                        if selectedScope == .day {
-                            // Single Day View (Drill Down automatically)
-                            if let data = filteredData.first {
-                                DailyDetailView(data: data)
-                            }
-                        } else {
-                            // List for longer ranges
-                            LazyVStack(spacing: 0) {
-                                ForEach(filteredData.reversed()) { data in // Descending order for list
-                                    Button {
-                                        selectedDay = data
-                                    } label: {
-                                        HStack {
-                                            VStack(alignment: .leading) {
-                                                Text(data.date.formatted(Date.FormatStyle().weekday(.abbreviated).month().day()))
-                                                    .font(.body)
-                                                    .fontWeight(.medium)
-                                            }
-                                            
-                                            Spacer()
-                                            
-                                            VStack(alignment: .trailing) {
-                                                Text(formatValue(getValue(for: data, metric: selectedMetric), metric: selectedMetric))
-                                                    .font(.headline)
-                                                    .foregroundStyle(selectedMetric.color)
-                                                
-                                                // Secondary metric (Steps if not steps)
-                                                if selectedMetric != .steps {
-                                                    Text(formatValue(data.steps, metric: .steps))
-                                                        .font(.caption)
-                                                        .foregroundStyle(.secondary)
-                                                }
-                                            }
-                                            
-                                            Image(systemName: "chevron.right")
-                                                .font(.caption)
-                                                .foregroundStyle(.tertiary)
-                                        }
-                                        .padding()
-                                        .background(Color(.systemBackground))
-                                    }
-                                    .buttonStyle(.plain)
-                                    
-                                    Divider()
-                                        .padding(.leading)
-                                }
-                            }
-                            .background(Color(.systemBackground))
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-                        }
-                    }
+                    breakdownSection
                 }
                 .padding(.vertical)
             }
@@ -305,6 +176,144 @@ struct MyDataView: View {
                         }
                     }
                 }
+            }
+        }
+        .sensoryFeedback(.selection, trigger: selectedScope)
+        .sensoryFeedback(.selection, trigger: selectedMetric)
+        .sensoryFeedback(.impact, trigger: referenceDate)
+        .sensoryFeedback(.impact, trigger: selectedDay)
+    }
+    
+    
+    // MARK: - Sections
+    
+    private var summarySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Menu {
+                    ForEach(HealthMetric.allCases) { metric in
+                        Button {
+                            selectedMetric = metric
+                        } label: {
+                            Label(metric.rawValue, systemImage: metric.icon)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(selectedMetric.rawValue)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        Image(systemName: "chevron.down")
+                            .font(.headline)
+                    }
+                    .foregroundStyle(selectedMetric.color)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing) {
+                    Text("TOTAL")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(formatValue(totalValue, metric: selectedMetric))
+                        .font(.headline)
+                        .fontWeight(.bold)
+                }
+                
+                VStack(alignment: .trailing) {
+                    Text("AVG")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(formatValue(averageValue, metric: selectedMetric))
+                        .font(.headline)
+                        .fontWeight(.bold)
+                }
+            }
+        }
+        .padding(.horizontal)
+    }
+    
+    private var chartSection: some View {
+        Group {
+            if !filteredData.isEmpty {
+                Chart {
+                    ForEach(filteredData) { data in
+                        BarMark(
+                            x: .value("Date", data.date, unit: .day),
+                            y: .value(selectedMetric.rawValue, getValue(for: data, metric: selectedMetric))
+                        )
+                        .foregroundStyle(selectedMetric.color.gradient)
+                    }
+                    
+                    if !filteredData.isEmpty {
+                        RuleMark(y: .value("Average", averageValue))
+                            .foregroundStyle(.gray.opacity(0.5))
+                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [5]))
+                            .annotation(position: .leading, alignment: .bottom) {
+                                Text("Avg")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                    }
+                }
+                .frame(height: 180)
+                .padding(.horizontal)
+            } else {
+                ContentUnavailableView("No Data", systemImage: "chart.bar.xaxis", description: Text("No data available for this time range."))
+                    .frame(height: 180)
+            }
+        }
+    }
+    
+    private var breakdownSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(selectedScope == .day ? "Details" : "Daily Breakdown")
+                .font(.headline)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+            
+            if selectedScope == .day {
+                if let data = filteredData.first {
+                    DailyDetailView(data: data)
+                }
+            } else {
+                LazyVStack(spacing: 0) {
+                    ForEach(filteredData.reversed()) { data in
+                        Button {
+                            selectedDay = data
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(data.date.formatted(Date.FormatStyle().weekday(.abbreviated).month().day()))
+                                        .font(.body)
+                                        .fontWeight(.medium)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing) {
+                                    Text(formatValue(getValue(for: data, metric: selectedMetric), metric: selectedMetric))
+                                        .font(.headline)
+                                        .foregroundStyle(selectedMetric.color)
+                                    if selectedMetric != .steps {
+                                        Text(formatValue(data.steps, metric: .steps))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding()
+                            .background(Color(.systemBackground))
+                        }
+                        .buttonStyle(.plain)
+                        Divider()
+                            .padding(.leading)
+                    }
+                }
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+                .padding(.horizontal)
             }
         }
     }

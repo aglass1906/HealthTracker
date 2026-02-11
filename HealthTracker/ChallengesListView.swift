@@ -105,12 +105,18 @@ struct ChallengesListView: View {
                         }
                     }
                 }
+                .refreshable {
+                    await viewModel.fetchActiveChallenges(for: familyId)
+                }
+                .sensoryFeedback(.selection, trigger: viewModel.selectedFilter)
             }
             
         }
         .task {
             // Refetch when view appears (e.g. switched tabs)
-            await viewModel.fetchActiveChallenges(for: familyId)
+            if viewModel.activeChallenges.isEmpty {
+                await viewModel.fetchActiveChallenges(for: familyId)
+            }
         }
     }
     

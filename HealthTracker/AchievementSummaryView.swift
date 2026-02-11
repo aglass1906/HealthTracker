@@ -10,6 +10,7 @@ import SwiftUI
 struct AchievementSummaryView: View {
     let event: SocialEvent
     @Environment(\.dismiss) private var dismiss
+    @State private var hapticTrigger = false
     
     var body: some View {
         VStack(spacing: 30) {
@@ -78,6 +79,10 @@ struct AchievementSummaryView: View {
             .padding(.bottom)
         }
         .padding()
+        .sensoryFeedback(.success, trigger: hapticTrigger)
+        .onAppear {
+            hapticTrigger = true
+        }
     }
     
     // MARK: - Helpers

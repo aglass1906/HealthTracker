@@ -99,15 +99,26 @@ struct SocialFeedView: View {
                 .padding(.horizontal)
                 .padding(.top)
             
-            if viewModel.isLoading {
+            if viewModel.isLoading && viewModel.events.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .padding()
             } else if viewModel.events.isEmpty {
-                Text("No recent activity.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .padding()
+                VStack(spacing: 16) {
+                    Image(systemName: "newspaper")
+                        .font(.system(size: 60))
+                        .foregroundStyle(.gray.opacity(0.3))
+                    Text("No Family Activity Yet")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    Text("Complete a workout or join a challenge to see updates here!")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, 40)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 12) {
@@ -116,11 +127,17 @@ struct SocialFeedView: View {
                                 .padding(.horizontal)
                         }
                     }
+                    .padding(.bottom)
+                }
+                .refreshable {
+                    await viewModel.fetchFeed(for: familyId)
                 }
             }
         }
         .task {
-            await viewModel.fetchFeed(for: familyId)
+            if viewModel.events.isEmpty {
+                await viewModel.fetchFeed(for: familyId)
+            }
         }
     }
     
@@ -154,6 +171,7 @@ struct SocialFeedItem: View {
     @State private var selectedChallenge: Challenge?
     @State private var showingAchievement = false
     @State private var showingWelcome = false
+    @State private var hapticTrigger = false
 
     @StateObject private var challengeVM = ChallengeViewModel()
     
@@ -350,11 +368,13 @@ struct SocialFeedItem: View {
         } message: {
             Text("Welcome \(event.profile?.display_name ?? "User") to the family!")
         }
+        .sensoryFeedback(.impact, trigger: hapticTrigger)
     }
     
     // MARK: - Navigation Logic
     
     private func handleTap() {
+        hapticTrigger.toggle()
         print("DEBUG: Tapped event type: \(event.type)")
         print("DEBUG: Payload: \(String(describing: event.payload))")
         

@@ -10,13 +10,13 @@ import HealthKit
 
 // MARK: - Activity Rings
 
-struct ActivityRings: Codable {
+struct ActivityRings: Codable, Equatable {
     let move: RingData
     let exercise: RingData
     let stand: RingData
 }
 
-struct RingData: Codable {
+struct RingData: Codable, Equatable {
     let value: Double
     let goal: Double
     let progress: Double
@@ -24,7 +24,7 @@ struct RingData: Codable {
 
 // MARK: - Workout Data
 
-struct WorkoutData: Identifiable, Codable {
+struct WorkoutData: Identifiable, Codable, Equatable {
     let id: String
     let workoutType: String
     let startDate: Date
@@ -60,7 +60,7 @@ struct WorkoutData: Identifiable, Codable {
 
 // MARK: - Daily Health Data
 
-struct DailyHealthData: Identifiable, Codable {
+struct DailyHealthData: Identifiable, Codable, Equatable {
     let id: String
     let date: Date
     let steps: Double
