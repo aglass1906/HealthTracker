@@ -30,17 +30,43 @@ class AuthManager: ObservableObject {
         
         Task {
             for await state in client.auth.authStateChanges {
+                // Handle session update on MainActor
+                let session = state.session
                 await MainActor.run {
-                    if let session = state.session {
-                        self.session = session
-                        self.isAuthenticated = true
-                    } else {
-                        self.session = nil
-                        self.isAuthenticated = false
-                    }
-                    self.isRestoringSession = false // Initial check done
+                    self.session = session
+                    self.isAuthenticated = (session != nil)
+                }
+                
+                // If we have a session, try to preload data while splash is showing
+                if session != nil {
+                    await preloadData()
+                }
+                
+                // Dimiss splash screen
+                await MainActor.run {
+                    self.isRestoringSession = false
                 }
             }
+        }
+    }
+    
+    private func preloadData() async {
+        // 1. Fetch Profile
+        _ = await fetchCurrentUserProfile()
+        
+        // 2. Import Health Data (with timeout)
+        await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                await HealthDataStore.shared.importLatestData()
+            }
+            group.addTask {
+                // 3 second timeout
+                try await Task.sleep(nanoseconds: 3 * 1_000_000_000)
+            }
+            
+            // Wait for first task to finish (either import done, or timeout)
+            try? await group.next()
+            group.cancelAll()
         }
     }
     

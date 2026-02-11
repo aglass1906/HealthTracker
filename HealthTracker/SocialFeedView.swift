@@ -151,6 +151,11 @@ private func colorForGoal(_ type: String) -> Color {
 struct SocialFeedItem: View {
     let event: SocialEvent
     @State private var selectedWorkout: WorkoutData?
+    @State private var selectedChallenge: Challenge?
+    @State private var showingAchievement = false
+    @State private var showingWelcome = false
+
+    @StateObject private var challengeVM = ChallengeViewModel()
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -304,7 +309,18 @@ struct SocialFeedItem: View {
                     .background(Color.yellow.opacity(0.15))
                     .cornerRadius(8)
                     .padding(.top, 4)
-                }
+                } else if event.type.starts(with: "ring_closed") {
+                   HStack {
+                       Image(systemName: iconName)
+                           .foregroundStyle(iconColor)
+                       Text("Closed Ring")
+                           .fontWeight(.semibold)
+                       Spacer()
+                   }
+                   .padding()
+                   .background(iconColor.opacity(0.1))
+                   .cornerRadius(12)
+               }
             }
         }
         .padding()
@@ -316,12 +332,68 @@ struct SocialFeedItem: View {
         )
         .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
         .onTapGesture {
-            if event.type == "workout_finished" {
-                selectedWorkout = reconstructWorkout(from: event.payload)
-            }
+            handleTap()
         }
         .sheet(item: $selectedWorkout) { workout in
             WorkoutSummaryView(workout: workout, profile: event.profile)
+        }
+        .sheet(item: $selectedChallenge) { challenge in
+            NavigationView {
+                ChallengeDetailView(challenge: challenge)
+            }
+        }
+        .sheet(isPresented: $showingAchievement) {
+            AchievementSummaryView(event: event)
+        }
+        .alert("Welcome!", isPresented: $showingWelcome) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Welcome \(event.profile?.display_name ?? "User") to the family!")
+        }
+    }
+    
+    // MARK: - Navigation Logic
+    
+    private func handleTap() {
+        print("DEBUG: Tapped event type: \(event.type)")
+        print("DEBUG: Payload: \(String(describing: event.payload))")
+        
+        if event.type == "workout_finished" {
+            selectedWorkout = reconstructWorkout(from: event.payload)
+        } else if event.type.starts(with: "challenge_") || event.type == "round_winner" {
+            // Need challenge ID
+            if let uuidString = event.payload?["challenge_id"] {
+                print("DEBUG: Found challenge_id: \(uuidString)")
+                if let uuid = UUID(uuidString: uuidString) {
+                    Task {
+                        print("DEBUG: Fetching challenge \(uuid)...")
+                        if let challenge = await challengeVM.fetchChallenge(id: uuid) {
+                            print("DEBUG: Challenge fetched successfully: \(challenge.title)")
+                            await MainActor.run {
+                                self.selectedChallenge = challenge
+                            }
+                        } else {
+                            print("DEBUG: Failed to fetch challenge")
+                            await MainActor.run {
+                                // Fallback to summary view if challenge deleted/not found
+                                self.showingAchievement = true
+                            }
+                        }
+                    }
+                } else {
+                    print("DEBUG: Invalid UUID string")
+                     // Fallback to summary view
+                    showingAchievement = true
+                }
+            } else {
+                print("DEBUG: No challenge_id in payload")
+                 // Fallback to summary view
+                showingAchievement = true
+            }
+        } else if event.type == "goal_met" || event.type.starts(with: "ring_closed") {
+            showingAchievement = true
+        } else if event.type == "joined_family" {
+            showingWelcome = true
         }
     }
     

@@ -278,22 +278,25 @@ class ChallengeViewModel: ObservableObject {
             await fetchActiveChallenges(for: familyId)
             
             // Post to Feed
-            Task {
-                var goalText = "\(target) \(metric.unit)"
-                if type == .count {
-                    if let endDate = endDate {
-                        goalText = "Most \(metric.displayName) by \(endDate.formatted(date: .abbreviated, time: .omitted))"
-                    } else {
-                        goalText = "Most \(metric.displayName)"
+            if let challenge = createdChallenges.first {
+                Task {
+                    var goalText = "\(target) \(metric.unit)"
+                    if type == .count {
+                        if let endDate = endDate {
+                            goalText = "Most \(metric.displayName) by \(endDate.formatted(date: .abbreviated, time: .omitted))"
+                        } else {
+                            goalText = "Most \(metric.displayName)"
+                        }
                     }
+                    
+                    let payload: [String: String] = [
+                        "title": title,
+                        "metric": metric.displayName,
+                        "goal": goalText,
+                        "challenge_id": challenge.id.uuidString
+                    ]
+                    await SocialFeedManager.shared.post(type: .challenge_created, familyId: familyId, payload: payload)
                 }
-                
-                let payload: [String: String] = [
-                    "title": title,
-                    "metric": metric.displayName,
-                    "goal": goalText
-                ]
-                await SocialFeedManager.shared.post(type: .challenge_created, familyId: familyId, payload: payload)
             }
             
             return true
@@ -559,7 +562,8 @@ class ChallengeViewModel: ObservableObject {
                 let payload: [String: String] = [
                     "title": title,
                     "metric": challenge.metric.displayName,
-                    "goal": goalText
+                    "goal": goalText,
+                    "challenge_id": challenge.id.uuidString
                 ]
                 await SocialFeedManager.shared.post(type: .challenge_updated, familyId: challenge.family_id, payload: payload)
             }
@@ -774,11 +778,17 @@ class ChallengeViewModel: ObservableObject {
                 // Need to re-fetch profiles? Or just use what we have in ChallengeParticipant?
                 // ChallengeParticipant has 'profile' which is `Profile`. Perfect.
                 for winner in winners {
-                    await SocialFeedManager.shared.postRoundWinner(
-                        challengeTitle: challenge.title,
-                        roundNumber: round.round_number,
-                        winnerName: winner.profile.display_name ?? "Unknown",
-                        familyId: challenge.family_id
+                    var payload = [
+                        "challenge_title": challenge.title,
+                        "round_number": String(round.round_number),
+                        "winner_name": winner.profile.display_name ?? "Unknown",
+                        "challenge_id": challenge.id.uuidString
+                    ]
+                    
+                    await SocialFeedManager.shared.post(
+                        type: .round_winner,
+                        familyId: challenge.family_id,
+                        payload: payload
                     )
                 }
             }
@@ -803,6 +813,24 @@ class ChallengeViewModel: ObservableObject {
                 self.currentRoundStats = []
             }
         }
+    }
+
+    // MARK: - Fetch Single Challenge
+    
+    func fetchChallenge(id: UUID) async -> Challenge? {
+         do {
+             let challenges: [Challenge] = try await client
+                 .from("challenges")
+                 .select()
+                 .eq("id", value: id)
+                 .execute()
+                 .value
+             
+             return challenges.first
+         } catch {
+             print("Fetch single challenge error: \(error)")
+             return nil
+         }
     }
     
     func refreshRoundStatuses(for challenge: Challenge) async {
@@ -977,7 +1005,8 @@ class ChallengeViewModel: ObservableObject {
                 "challenge_title": challenge.title,
                 "winner_name": winnerName,
                 "metric": winMetric,
-                "value": winValue
+                "value": winValue,
+                "challenge_id": challenge.id.uuidString
             ]
             
             await SocialFeedManager.shared.post(type: .challenge_won, familyId: challenge.family_id, payload: payload)
