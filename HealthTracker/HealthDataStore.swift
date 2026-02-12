@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import HealthKit
 
 @MainActor
 class HealthDataStore: ObservableObject {
@@ -118,7 +119,6 @@ class HealthDataStore: ObservableObject {
             }
             
             saveData()
-            saveData()
             
             // Sync to Supabase
             Task {
@@ -126,9 +126,18 @@ class HealthDataStore: ObservableObject {
                 await SyncManager.shared.syncWorkouts(workouts: workoutsValue)
                 await SyncManager.shared.syncRings(rings: ringsValue)
             }
+            
+            // Clear error on success
+            lastErrorMessage = nil
         } catch {
             print("Failed to fetch today's data: \(error)")
-            lastErrorMessage = "Today Sync Error: \(error.localizedDescription)"
+            
+            // Check for locked database
+            if let hkError = error as? HKError, hkError.code == .errorDatabaseInaccessible {
+                lastErrorMessage = "Sync was interrupted because the device was locked. Information is being updated now..."
+            } else {
+                lastErrorMessage = "Today Sync Error: \(error.localizedDescription)"
+            }
         }
     }
     
@@ -187,9 +196,18 @@ class HealthDataStore: ObservableObject {
             // Update today's data
             let today = calendar.startOfDay(for: Date())
             todayData = allDailyData.first { calendar.isDate($0.date, inSameDayAs: today) }
+            
+            // Clear error on success
+            lastErrorMessage = nil
         } catch {
             print("Failed to fetch all data: \(error)")
-            lastErrorMessage = "All Data Sync Error: \(error.localizedDescription)"
+            
+            // Check for locked database
+            if let hkError = error as? HKError, hkError.code == .errorDatabaseInaccessible {
+                lastErrorMessage = "Sync was interrupted because the device was locked. Information is being updated now..."
+            } else {
+                lastErrorMessage = "All Data Sync Error: \(error.localizedDescription)"
+            }
         }
     }
     
@@ -274,15 +292,17 @@ class HealthDataStore: ObservableObject {
                 await SyncManager.shared.uploadBatchStats(dataList: mergedData)
             }
             
-            // Mark as imported
-            userDefaults.set(true, forKey: hasImportedKey)
-            
-            // Update today's data
-            let today = calendar.startOfDay(for: Date())
-            todayData = allDailyData.first { calendar.isDate($0.date, inSameDayAs: today) }
+            // Clear error on success
+            lastErrorMessage = nil
         } catch {
             print("Failed to import data: \(error)")
-            lastErrorMessage = "Import Error: \(error.localizedDescription)"
+            
+            // Check for locked database
+            if let hkError = error as? HKError, hkError.code == .errorDatabaseInaccessible {
+                lastErrorMessage = "Sync was interrupted because the device was locked. Information is being updated now..."
+            } else {
+                lastErrorMessage = "Import Error: \(error.localizedDescription)"
+            }
         }
     }
     
@@ -370,8 +390,18 @@ class HealthDataStore: ObservableObject {
                     
                     // Update today's data
                     todayData = allDailyData.first { calendar.isDate($0.date, inSameDayAs: today) }
+                    
+                    // Clear error on success
+                    lastErrorMessage = nil
                 } catch {
                     print("Failed to import latest data: \(error)")
+                    
+                    // Check for locked database
+                    if let hkError = error as? HKError, hkError.code == .errorDatabaseInaccessible {
+                        lastErrorMessage = "Sync was interrupted because the device was locked. Information is being updated now..."
+                    } else {
+                        lastErrorMessage = "Import Latest Error: \(error.localizedDescription)"
+                    }
                 }
             } else {
                 // Just refresh today's data
