@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct MorningBriefingView: View {
-    @StateObject private var briefingManager = MorningBriefingManager.shared
+    @ObservedObject private var briefingManager = MorningBriefingManager.shared
     let data: DailyHealthData
     var onDismiss: () -> Void
     
@@ -24,13 +24,8 @@ struct MorningBriefingView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                Spacer()
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.secondary.opacity(0.5))
                 }
-            }
+
             
             // Rings Summary
             if let rings = data.activityRings {
@@ -68,51 +63,27 @@ struct MorningBriefingView: View {
                 .cornerRadius(12)
             }
             
-            // Notification Discovery (for existing users or those who skipped)
-            if !briefingManager.isNotificationsEnabled {
-                Button {
-                    Task {
-                        let granted = await NotificationManager.shared.requestAuthorization()
-                        if granted {
-                            withAnimation {
-                                briefingManager.isNotificationsEnabled = true
-                                briefingManager.rescheduleNotification()
-                            }
-                        }
-                    }
-                } label: {
-                    HStack {
-                        Image(systemName: "bell.badge.fill")
-                            .foregroundStyle(.orange)
-                        Text("Want this as a daily alert?")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        Text("Enable")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(8)
-                    }
-                    .padding(12)
-                    .background(Color.blue.opacity(0.05))
-                    .cornerRadius(12)
-                }
-                .padding(.top, 4)
+
+            
+            Spacer()
+            
+            Button {
+                onDismiss()
+            } label: {
+                Text("Awesome, I'm Ready!")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.blue)
+                    .cornerRadius(16)
             }
         }
         .padding()
-        .background {
-            RoundedRectangle(cornerRadius: 24)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.08), radius: 15, x: 0, y: 5)
-        }
+        .background(Color(.systemBackground))
+        // Removed inner card styling as this now lives in a sheet
         .padding(.horizontal)
-        .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
 

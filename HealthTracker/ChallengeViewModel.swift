@@ -429,6 +429,17 @@ class ChallengeViewModel: ObservableObject {
             
             self.participants = tempParticipants
             
+            // 5. Check for Race Completion
+            if let leader = tempParticipants.first {
+                if challenge.type == .race && leader.value >= Double(challenge.target_value) {
+                    // Race finished!
+                    await checkChallengeCompletion(for: challenge)
+                } else if challenge.isEnded {
+                    // Challenge ended naturally
+                     await checkChallengeCompletion(for: challenge)
+                }
+            }
+            
         } catch {
             print("Load progress error: \(error)")
         }
@@ -879,15 +890,23 @@ class ChallengeViewModel: ObservableObject {
     // MARK: - Challenge Completion
     
     func checkChallengeCompletion(for challenge: Challenge) async {
+        // 1. Check if already completed in DB
+        if challenge.status == .completed {
+            return
+        }
+
         // Temp fix: Allow re-posting for the known broken challenge
         if challenge.id.uuidString == "0d56277c-87d6-4782-93a5-c77a4a5d0e6f" {
             UserDefaults.standard.removeObject(forKey: "posted_challenge_won_\(challenge.id.uuidString)")
         }
 
-        // Only check if challenge has ended
-        guard challenge.isEnded else { return }
+        // Only check if challenge has ended (by date) OR if it's a Race that might be finished
+        // For non-race, we strictly respect end date
+        if challenge.type != .race && !challenge.isEnded {
+            return
+        }
         
-        // Check if we've already posted about this challenge completion
+        // Use a local lock to prevent double-posting from THIS device immediately
         let completionKey = "posted_challenge_won_\(challenge.id.uuidString)"
         if UserDefaults.standard.bool(forKey: completionKey) {
             return
@@ -905,6 +924,7 @@ class ChallengeViewModel: ObservableObject {
             var winnerName = "Someone"
             var winMetric = ""
             var winValue = ""
+            var hasWinner = false
             
             if challenge.round_duration != nil {
                 // Round-based: Winner is person with most round wins
@@ -932,12 +952,11 @@ class ChallengeViewModel: ObservableObject {
                 
                 if let profile = profiles.first(where: { $0.id == winnerId }) {
                     winnerName = profile.display_name ?? profile.email ?? "Someone"
-                } else {
-                    print("Profile NOT found for winnerId: \(winnerId)")
                 }
                 
                 winMetric = "Rounds Won"
                 winValue = "\(wins) wins"
+                hasWinner = true
                 
             } else {
                 // Cumulative: Existing logic
@@ -947,7 +966,9 @@ class ChallengeViewModel: ObservableObject {
                 let formatter = DateFormatter()
                 formatter.dateFormat = "yyyy-MM-dd"
                 let startString = formatter.string(from: challenge.start_date)
-                let endString = formatter.string(from: challenge.end_date ?? Date())
+                // For Race, we might be checking completion BEFORE end date, so use now
+                let endDateToCheck = challenge.end_date ?? Date()
+                let endString = formatter.string(from: endDateToCheck)
                 
                 let stats: [DailyStatDB] = try await client
                     .from("daily_stats")
@@ -987,32 +1008,74 @@ class ChallengeViewModel: ObservableObject {
                 userTotals.sort { $0.value > $1.value }
                 
                 // Get winner
-                guard let winner = userTotals.first,
-                      let winnerProfile = profiles.first(where: { $0.id == winner.userId }),
-                      winner.value > 0 else {
-                    // No winner or no one participated
-                    UserDefaults.standard.set(true, forKey: completionKey)
-                    return
+                guard let winner = userTotals.first else { return }
+                
+                // Check if winner actually won
+                // For Race: Must meet target
+                // For Others: Must be end date (checked above) and value > 0
+                
+                if challenge.type == .race {
+                    if winner.value >= Double(challenge.target_value) {
+                         // Race Won!
+                        hasWinner = true
+                    } else if challenge.isEnded {
+                        // Race ended without winner? Or closest?
+                        // Usually race implies "First to X". If time runs out, maybe person with most?
+                        // Let's assume standard logic: If ended, person with most wins if > 0
+                        if winner.value > 0 {
+                            hasWinner = true
+                        }
+                    }
+                } else {
+                    // Standard Leaderboard/Streak
+                    if winner.value > 0 {
+                        hasWinner = true
+                    }
                 }
                 
-                winnerName = winnerProfile.display_name ?? winnerProfile.email ?? "Someone"
-                winMetric = challenge.metric.displayName
-                winValue = String(format: "%.0f", winner.value)
+                if hasWinner {
+                    if let winnerProfile = profiles.first(where: { $0.id == winner.userId }) {
+                        winnerName = winnerProfile.display_name ?? winnerProfile.email ?? "Someone"
+                    }
+                    winMetric = challenge.metric.displayName
+                    winValue = String(format: "%.0f", winner.value)
+                }
             }
             
-            // Post feed event
-            let payload: [String: String] = [
-                "challenge_title": challenge.title,
-                "winner_name": winnerName,
-                "metric": winMetric,
-                "value": winValue,
-                "challenge_id": challenge.id.uuidString
-            ]
-            
-            await SocialFeedManager.shared.post(type: .challenge_won, familyId: challenge.family_id, payload: payload)
-            
-            // Mark as posted
-            UserDefaults.standard.set(true, forKey: completionKey)
+            if hasWinner {
+                // 1. Update Challenge Status to Completed to prevent other devices from posting
+                try await client
+                    .from("challenges")
+                    .update(["status": "completed"])
+                    .eq("id", value: challenge.id)
+                    .execute()
+                
+                // 2. Post feed event
+                let payload: [String: String] = [
+                    "challenge_title": challenge.title,
+                    "winner_name": winnerName,
+                    "metric": winMetric,
+                    "value": winValue,
+                    "challenge_id": challenge.id.uuidString
+                ]
+                
+                await SocialFeedManager.shared.post(type: .challenge_won, familyId: challenge.family_id, payload: payload)
+                
+                // 3. Mark locally
+                UserDefaults.standard.set(true, forKey: completionKey)
+                
+                // 4. Refresh list to show completed status UI
+                await fetchActiveChallenges(for: challenge.family_id)
+            } else if challenge.isEnded {
+                // Ended but no winner (e.g. 0 steps), mark completed anyway so we don't keep checking
+                 try await client
+                     .from("challenges")
+                     .update(["status": "completed"])
+                     .eq("id", value: challenge.id)
+                     .execute()
+                
+                await fetchActiveChallenges(for: challenge.family_id)
+            }
             
         } catch {
             print("Check challenge completion error: \(error)")

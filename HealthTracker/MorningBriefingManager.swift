@@ -12,7 +12,8 @@ import Combine
 class MorningBriefingManager: ObservableObject {
     static let shared = MorningBriefingManager()
     
-    @Published var shouldShowBriefing = false
+    @Published var shouldShowPopup = false
+    @Published var shouldShowBriefing = false // This controls the feed item
     @Published var briefingData: DailyHealthData?
     
     // Notification Settings
@@ -37,9 +38,12 @@ class MorningBriefingManager: ObservableObject {
     }
     
     private let userDefaults = UserDefaults.standard
-    private let lastBriefedDateKey = "morning_briefing_last_date"
+    private let lastBriefedDateKey = "morning_briefing_last_date" // For feed
+    private let popupShownDateKey = "morning_briefing_popup_shown_date" // For popup
     private let notificationsEnabledKey = "morning_briefing_enabled"
     private let preferredTimeKey = "morning_briefing_time"
+    
+    private var cancellables = Set<AnyCancellable>()
     
     private init() {
         // Load settings
@@ -55,7 +59,16 @@ class MorningBriefingManager: ObservableObject {
             self.preferredTime = Calendar.current.date(from: components) ?? Date()
         }
         
+        // Initial check
         checkBriefingStatus()
+        
+        // Subscribe to data updates to re-check when data helps
+        HealthDataStore.shared.$allDailyData
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.checkBriefingStatus()
+            }
+            .store(in: &cancellables)
     }
     
     func rescheduleNotification() {
@@ -79,36 +92,62 @@ class MorningBriefingManager: ObservableObject {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         
-        // 1. Check if we've already briefed today
-        if let lastDate = userDefaults.object(forKey: lastBriefedDateKey) as? Date {
-            if calendar.isDate(lastDate, inSameDayAs: today) {
-                shouldShowBriefing = false
-                return
-            }
-        }
-        
-        // 2. We only show it in the "morning" (e.g., before 11:00 AM)
+        // 1. Time Check: We only show it in the "morning" (e.g., before 11:00 AM)
         let hour = calendar.component(.hour, from: Date())
         guard hour < 11 else {
             shouldShowBriefing = false
+            shouldShowPopup = false
             return
         }
         
-        // 3. Get yesterday's data
+        // 2. Data Check: Get yesterday's data
         let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
-        if let data = HealthDataStore.shared.getDailyData(for: yesterday) {
-            self.briefingData = data
-            self.shouldShowBriefing = true
-        } else {
+        guard let data = HealthDataStore.shared.getDailyData(for: yesterday) else {
+            // No data yet, wait for sync
             shouldShowBriefing = false
+            shouldShowPopup = false
+            return
+        }
+        
+        self.briefingData = data
+        
+        // 3. Feed Status Check
+        if let lastDate = userDefaults.object(forKey: lastBriefedDateKey) as? Date,
+           calendar.isDate(lastDate, inSameDayAs: today) {
+            shouldShowBriefing = false
+        } else {
+            shouldShowBriefing = true
+        }
+        
+        // 4. Popup Status Check
+        if let lastPopupDate = userDefaults.object(forKey: popupShownDateKey) as? Date,
+           calendar.isDate(lastPopupDate, inSameDayAs: today) {
+            shouldShowPopup = false
+        } else {
+            shouldShowPopup = true
         }
     }
     
     func dismissBriefing() {
+        // Dismiss from feed
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         userDefaults.set(today, forKey: lastBriefedDateKey)
         shouldShowBriefing = false
+    }
+    
+    func dismissPopup() {
+        // Dismiss popup only
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        userDefaults.set(today, forKey: popupShownDateKey)
+        shouldShowPopup = false
+    }
+    
+    func resetBriefingStatus() {
+        userDefaults.removeObject(forKey: lastBriefedDateKey)
+        userDefaults.removeObject(forKey: popupShownDateKey)
+        checkBriefingStatus()
     }
     
     func generateSummary() -> (title: String, body: String) {

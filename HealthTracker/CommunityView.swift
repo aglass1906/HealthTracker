@@ -56,6 +56,11 @@ class FamilyViewModel: ObservableObject {
                 
                 self.family = family
                 
+                // Ensure join event is posted (idempotent check)
+                Task {
+                    await SocialFeedManager.shared.checkAndPostJoin(familyId: family.id)
+                }
+                
                 // 3. Fetch Members
                 let members: [Profile] = try await client
                     .from("profiles")

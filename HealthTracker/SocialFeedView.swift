@@ -22,11 +22,48 @@ struct SocialEvent: Codable, Identifiable {
     let profile: Profile?
 }
 
+enum FeedTimeframe: String, CaseIterable, Identifiable {
+    case last7Days = "Last 7 Days"
+    case last30Days = "Last 30 Days"
+    case allTime = "All Time"
+    
+    var id: String { rawValue }
+}
+
+enum FeedFilter: String, CaseIterable, Identifiable {
+    case all = "All Activity"
+    case challenges = "Challenges" // created, won, updated, round_winner
+    case workouts = "Workouts"
+    case achievements = "Achievements" // goals, rings
+    
+    var id: String { rawValue }
+}
+
 class SocialFeedViewModel: ObservableObject {
     @Published var events: [SocialEvent] = []
     @Published var isLoading = false
     
+    @Published var selectedTimeframe: FeedTimeframe = .last7Days
+    @Published var selectedType: FeedFilter = .all
+    
     let client = AuthManager.shared.client
+    
+    // Computed property for grouping
+    var sections: [(date: Date, events: [SocialEvent])] {
+        let grouped = Dictionary(grouping: events) { event -> Date in
+            // Parse date
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = formatter.date(from: event.created_at) {
+                 return Calendar.current.startOfDay(for: date)
+            }
+             // Fallback
+             return Calendar.current.startOfDay(for: Date())
+        }
+        
+        return grouped.sorted { $0.key > $1.key }
+            .map { (date: $0.key, events: $0.value) }
+    }
     
     func fetchFeed(for familyId: UUID) async {
         isLoading = true
@@ -50,17 +87,58 @@ class SocialFeedViewModel: ObservableObject {
                 let created_at: String
             }
             
-            let rawEvents: [EventDB] = try await client
+            var query = client
                 .from("social_events")
                 .select()
                 .eq("family_id", value: familyId)
-                .order("created_at", ascending: false)
-                .limit(20)
-                .execute()
-                .value
             
-            // 3. Map
-            self.events = rawEvents.map { event in
+            // Apply Timeframe Filter (Must be before Order/Limit)
+            let today = Date()
+            let calendar = Calendar.current
+            var limit = 20
+            
+            switch selectedTimeframe {
+            case .last7Days:
+                if let date = calendar.date(byAdding: .day, value: -7, to: today) {
+                    let formatter = ISO8601DateFormatter()
+                    query = query.gte("created_at", value: formatter.string(from: date))
+                    limit = 50
+                }
+            case .last30Days:
+                if let date = calendar.date(byAdding: .day, value: -30, to: today) {
+                    let formatter = ISO8601DateFormatter()
+                    query = query.gte("created_at", value: formatter.string(from: date))
+                    limit = 100
+                }
+            case .allTime:
+                limit = 200
+            }
+            
+            // Order and Limit must be last
+            // Order and Limit must be last (returns TransformBuilder, so new var)
+            let finalQuery = query
+                .order("created_at", ascending: false)
+                .limit(limit)
+            
+            // Note: "Type" filtering is harder to do safely in Supabase purely via .in() if we have mapped categories.
+            // "Challenges" = challenge_created, challenge_won, round_winner, challenge_updated
+            // "Achievements" = goal_met, ring_closed_move...
+            // It might be easier to fetch wide and filter locally for smoother UX, OR strict query.
+            // Let's filter LOCALLY for now to make the "All -> Challenges" switch instant without network call,
+            // UNLESS the dataset is huge. Given the limits (50/100), local filtering is better for UX.
+            // WAITING: The fetchFeed is called on appear or refresh.
+            // If I change the filter picker, should I re-fetch?
+            // Local filtering is faster. Let's fetch based on Timeframe, then filter the `events` array?
+            // No, `events` should be the source of truth for the UI.
+            // Let's store `allFetchedEvents` and `events` (display).
+            // Actually, keep it simple: Fetch what's needed.
+            // But if I toggle "Workouts" -> "All", I need "All".
+            // So I must fetch "All" for the timeframe, and THEN filter for display.
+            
+            let rawEvents: [EventDB] = try await finalQuery.execute().value
+            
+            // 3. Map & Filter Locally
+            let allMappedEvents = rawEvents.compactMap { event -> SocialEvent? in
                 let profile = profiles.first(where: { $0.id == event.user_id })
                 return SocialEvent(
                     id: event.id,
@@ -71,6 +149,19 @@ class SocialFeedViewModel: ObservableObject {
                     created_at: event.created_at,
                     profile: profile
                 )
+            }
+            
+            // Filter by Type
+            self.events = allMappedEvents.filter { event in
+                switch selectedType {
+                case .all: return true
+                case .challenges:
+                    return event.type.contains("challenge") || event.type == "round_winner"
+                case .workouts:
+                    return event.type == "workout_finished"
+                case .achievements:
+                    return event.type == "goal_met" || event.type.starts(with: "ring_closed")
+                }
             }
             
         } catch {
@@ -94,47 +185,94 @@ struct SocialFeedView: View {
     @StateObject private var briefingManager = MorningBriefingManager.shared
     
     var body: some View {
-        VStack(alignment: .leading) {
-            Text("Family Feed")
-                .font(.headline)
-                .padding(.horizontal)
-                .padding(.top)
+        VStack(alignment: .leading, spacing: 0) {
+            // Header with Filters
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Family Feed")
+                    .font(.headline)
+                
+                HStack {
+                    // Timeframe Picker
+                    Menu {
+                        Picker("Timeframe", selection: $viewModel.selectedTimeframe) {
+                            ForEach(FeedTimeframe.allCases) { timeframe in
+                                Text(timeframe.rawValue).tag(timeframe)
+                            }
+                        }
+                    } label: {
+                        Label(viewModel.selectedTimeframe.rawValue, systemImage: "calendar")
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(20)
+                    }
+                    
+                    // Filter Type Picker
+                    Menu {
+                        Picker("Filter", selection: $viewModel.selectedType) {
+                            ForEach(FeedFilter.allCases) { filter in
+                                Text(filter.rawValue).tag(filter)
+                            }
+                        }
+                    } label: {
+                        Label(viewModel.selectedType.rawValue, systemImage: "line.3.horizontal.decrease.circle")
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(20)
+                            // Highlight if active filter
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .stroke(viewModel.selectedType == .all ? Color.clear : Color.blue, lineWidth: 1)
+                            )
+                    }
+                    
+                    Spacer()
+                }
+            }
+            .padding()
             
             if viewModel.isLoading && viewModel.events.isEmpty {
                 ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if viewModel.events.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "newspaper")
                         .font(.system(size: 60))
                         .foregroundStyle(.gray.opacity(0.3))
-                    Text("No Family Activity Yet")
+                    Text("No Activity Found")
                         .font(.headline)
                         .foregroundStyle(.secondary)
-                    Text("Complete a workout or join a challenge to see updates here!")
+                    Text("Try changing your filters or checking back later.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.top, 40)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                         if briefingManager.shouldShowBriefing, let data = briefingManager.briefingData {
                             MorningBriefingView(data: data) {
                                 withAnimation {
                                     briefingManager.dismissBriefing()
                                 }
                             }
-                            .padding(.top, 8)
+                            .padding(.horizontal)
+                            .padding(.bottom, 16)
                         }
                         
-                        ForEach(viewModel.events) { event in
-                            SocialFeedItem(event: event)
-                                .padding(.horizontal)
+                        ForEach(viewModel.sections, id: \.date) { section in
+                            Section(header: DateHeaderView(date: section.date)) {
+                                ForEach(section.events) { event in
+                                    SocialFeedItem(event: event)
+                                        .padding(.horizontal)
+                                        .padding(.vertical, 6)
+                                }
+                            }
                         }
                     }
                     .padding(.bottom)
@@ -148,6 +286,12 @@ struct SocialFeedView: View {
             if viewModel.events.isEmpty {
                 await viewModel.fetchFeed(for: familyId)
             }
+        }
+        .onChange(of: viewModel.selectedTimeframe) { _ in
+            Task { await viewModel.fetchFeed(for: familyId) }
+        }
+        .onChange(of: viewModel.selectedType) { _ in
+            Task { await viewModel.fetchFeed(for: familyId) }
         }
     }
     
@@ -556,6 +700,37 @@ struct SocialFeedItem: View {
         case "ring_closed_stand": return .blue
         case "challenge_updated": return .cyan
         default: return .gray
+        }
+    }
+}
+
+struct DateHeaderView: View {
+    let date: Date
+    
+    var body: some View {
+        HStack {
+            Text(dateString)
+                .font(.subheadline)
+                .fontWeight(.bold)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            
+            Spacer()
+        }
+        .background(Color(.systemGroupedBackground)) // Subtle background for sticky header
+    }
+    
+    var dateString: String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            return "Today"
+        } else if calendar.isDateInYesterday(date) {
+            return "Yesterday"
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMMM d"
+            return formatter.string(from: date)
         }
     }
 }

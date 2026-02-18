@@ -8,15 +8,15 @@ Resolve Package Graph
 
 
 Resolved source packages:
-  swift-clocks: https://github.com/pointfreeco/swift-clocks @ 1.0.6
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.5.1
+  xctest-dynamic-overlay: https://github.com/pointfreeco/xctest-dynamic-overlay @ 1.8.1
   swift-crypto: https://github.com/apple/swift-crypto.git @ 4.2.0
   swift-concurrency-extras: https://github.com/pointfreeco/swift-concurrency-extras @ 1.3.2
-  swift-http-types: https://github.com/apple/swift-http-types.git @ 1.5.1
+  swift-clocks: https://github.com/pointfreeco/swift-clocks @ 1.0.6
   Supabase: https://github.com/supabase/supabase-swift @ 2.41.0
-  xctest-dynamic-overlay: https://github.com/pointfreeco/xctest-dynamic-overlay @ 1.8.1
-  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.5.1
+  swift-http-types: https://github.com/apple/swift-http-types.git @ 1.5.1
 
-2026-02-13 09:11:38.375 xcodebuild[778:6461359] [MT] IDERunDestination: Supported platforms for the buildables in the current scheme is empty.
+2026-02-13 09:12:50.459 xcodebuild[1248:6463503] [MT] IDERunDestination: Supported platforms for the buildables in the current scheme is empty.
 --- xcodebuild: WARNING: Using the first of multiple matching destinations:
 { platform:iOS Simulator, id:dvtdevice-DVTiOSDeviceSimulatorPlaceholder-iphonesimulator:placeholder, name:Any iOS Simulator Device }
 { platform:iOS Simulator, arch:x86_64, id:81E10656-1E3B-4840-8827-6767B59D19EE, OS:26.2, name:iPad (A16) }
@@ -160,8 +160,8 @@ ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeD
 
 ReadFileContents /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/docc/features.json
 
-Build description signature: 89e26444d23bdab55394fc3408896844
-Build description path: /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/XCBuildData/89e26444d23bdab55394fc3408896844.xcbuilddata
+Build description signature: a2dd0d53e7ef3c25fd9eed5ace2f3be3
+Build description path: /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/XCBuildData/a2dd0d53e7ef3c25fd9eed5ace2f3be3.xcbuilddata
 ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk /Users/alanglass/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.2-23C53-7d00a8b37fbd7999ea79df8ebc024bf0.sdkstatcache
     cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
     /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk -o /Users/alanglass/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.2-23C53-7d00a8b37fbd7999ea79df8ebc024bf0.sdkstatcache
@@ -170,138 +170,177 @@ ProcessInfoPlistFile /Users/alanglass/Library/Developer/Xcode/DerivedData/Health
     cd /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/swift-crypto
     builtin-infoPlistUtility /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto.build/empty-swift-crypto_Crypto.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist
 
-ProcessProductPackaging /Users/alanglass/_dev_local/HealthTracker/HealthTracker/HealthTracker.entitlements /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker.app.xcent (in target 'HealthTracker' from project 'HealthTracker')
-    cd /Users/alanglass/_dev_local/HealthTracker
-    
-    Entitlements:
-    
-    {
-}
-    
-    builtin-productPackagingUtility /Users/alanglass/_dev_local/HealthTracker/HealthTracker/HealthTracker.entitlements -entitlements -format xml -o /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker.app.xcent
-
-ProcessProductPackaging /Users/alanglass/_dev_local/HealthTracker/HealthTracker/HealthTracker.entitlements /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker.app-Simulated.xcent (in target 'HealthTracker' from project 'HealthTracker')
-    cd /Users/alanglass/_dev_local/HealthTracker
-    
-    Entitlements:
-    
-    {
-    "application-identifier" = "E8QJP225V8.com.sankofaplex.HealthTracker";
-    "com.apple.developer.healthkit" = 1;
-    "com.apple.developer.healthkit.background-delivery" = 1;
-}
-    
-    builtin-productPackagingUtility /Users/alanglass/_dev_local/HealthTracker/HealthTracker/HealthTracker.entitlements -entitlements -format xml -o /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker.app-Simulated.xcent
-
 SwiftDriver Auth normal arm64 com.apple.xcode.tools.swift.compiler (in target 'Auth' from project 'Supabase')
     cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
     builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name Auth -Onone -enforce-exclusivity\=checked @/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/Objects-normal/arm64/Auth.SwiftFileList -DSWIFT_PACKAGE -DDEBUG -DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE -DXcode -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk -target arm64-apple-ios13.0-simulator -g -module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -suppress-warnings -index-store-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk/Developer/Library/Frameworks -c -j16 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/alanglass/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.2-23C53-7d00a8b37fbd7999ea79df8ebc024bf0.sdkstatcache -output-file-map /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/Objects-normal/arm64/Auth-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/Objects-normal/arm64/Auth.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -package-name supabase_swift -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/Objects-normal/arm64/Auth_const_extract_protocols.json -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/DerivedSources-normal/arm64 -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/DerivedSources/arm64 -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/DerivedSources -Xcc -DSWIFT_PACKAGE -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/Objects-normal/arm64/Auth-Swift.h -working-directory /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj -experimental-emit-module-separately -disable-cmo
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/EditProfileView.swift:124:1: error: extraneous '}' at top level
-}
-^
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:69:13: error: expressions are not allowed at the top level
-            Spacer()
-            ^
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:71:13: error: expressions are not allowed at the top level
-            Button {
-            ^
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:83:9: error: extraneous '}' at top level
-        }
-        ^
-        
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:84:9: error: expressions are not allowed at the top level
+
+SwiftCompile normal arm64 Compiling\ Types.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Types.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Types.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:83:9: error: expected declaration
         .padding()
         ^
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:88:5: error: extraneous '}' at top level
-    }
-    ^
-    
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:89:1: error: extraneous '}' at top level
+/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:10:8: note: in declaration of 'MorningBriefingView'
+struct MorningBriefingView: View {
+       ^
+/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:88:1: error: extraneous '}' at top level
 }
 ^
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/EditProfileView.swift:124:1: error: extraneous '}' at top level
-}
-^
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:69:13: error: expressions are not allowed at the top level
-            Spacer()
-            ^
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:71:13: error: expressions are not allowed at the top level
-            Button {
-            ^
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:83:9: error: extraneous '}' at top level
-        }
-        ^
-        
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:84:9: error: expressions are not allowed at the top level
+/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:83:9: error: expected declaration
         .padding()
         ^
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:88:5: error: extraneous '}' at top level
-    }
-    ^
-    
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:89:1: error: extraneous '}' at top level
+/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:10:8: note: in declaration of 'MorningBriefingView'
+struct MorningBriefingView: View {
+       ^
+/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:88:1: error: extraneous '}' at top level
 }
 ^
 
-ProcessProductPackagingDER /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker.app.xcent /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker.app.xcent.der (in target 'HealthTracker' from project 'HealthTracker')
-    cd /Users/alanglass/_dev_local/HealthTracker
-    /usr/bin/derq query -f xml -i /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker.app.xcent -o /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker.app.xcent.der --raw
+SwiftCompile normal arm64 Compiling\ AuthClientConfiguration.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/AuthClientConfiguration.swift (in target 'Auth' from project 'Supabase')
 
-ProcessProductPackagingDER /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker.app-Simulated.xcent /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker.app-Simulated.xcent.der (in target 'HealthTracker' from project 'HealthTracker')
-    cd /Users/alanglass/_dev_local/HealthTracker
-    /usr/bin/derq query -f xml -i /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker.app-Simulated.xcent -o /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker.app-Simulated.xcent.der --raw
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/AuthClientConfiguration.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftCompile normal arm64 Compiling\ AuthClient.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/AuthClient.swift (in target 'Auth' from project 'Supabase')
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/AuthClient.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ Auth (in target 'Auth' from project 'Supabase')
+
+EmitSwiftModule normal arm64 (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling AuthClientConfiguration.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 Compiling\ Defaults.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Defaults.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Defaults.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftCompile normal arm64 Compiling\ AuthAdmin.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/AuthAdmin.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/AuthAdmin.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftCompile normal arm64 Compiling\ AuthMFA.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/AuthMFA.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/AuthMFA.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftCompile normal arm64 Compiling\ AuthAdminOAuth.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/AuthAdminOAuth.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/AuthAdminOAuth.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftCompile normal arm64 Compiling\ APIClient.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Internal/APIClient.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Internal/APIClient.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftCompile normal arm64 Compiling\ AuthError.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/AuthError.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/AuthError.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftCompile normal arm64 Compiling\ Deprecated.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Deprecated.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Deprecated.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftCompile normal arm64 Compiling\ EventEmitter.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Internal/EventEmitter.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Internal/EventEmitter.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftCompile normal arm64 Compiling\ Dependencies.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Internal/Dependencies.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Internal/Dependencies.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftCompile normal arm64 Compiling\ CodeVerifierStorage.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Internal/CodeVerifierStorage.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Internal/CodeVerifierStorage.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftCompile normal arm64 Compiling\ SessionStorage.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Internal/SessionStorage.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Internal/SessionStorage.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftCompile normal arm64 Compiling\ AuthLocalStorage.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Storage/AuthLocalStorage.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Storage/AuthLocalStorage.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftCompile normal arm64 Compiling\ SessionManager.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Internal/SessionManager.swift (in target 'Auth' from project 'Supabase')
+
+SwiftCompile normal arm64 /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Internal/SessionManager.swift (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling AuthLocalStorage.swift (in target 'Auth' from project 'Supabase')
+
+SwiftDriverJobDiscovery normal arm64 Compiling Defaults.swift (in target 'Auth' from project 'Supabase')
+
+SwiftDriverJobDiscovery normal arm64 Compiling Deprecated.swift (in target 'Auth' from project 'Supabase')
+
+SwiftDriverJobDiscovery normal arm64 Compiling EventEmitter.swift (in target 'Auth' from project 'Supabase')
+
+SwiftDriverJobDiscovery normal arm64 Compiling Dependencies.swift (in target 'Auth' from project 'Supabase')
+
+SwiftDriverJobDiscovery normal arm64 Compiling CodeVerifierStorage.swift (in target 'Auth' from project 'Supabase')
+
+SwiftDriverJobDiscovery normal arm64 Compiling SessionStorage.swift (in target 'Auth' from project 'Supabase')
+
+SwiftDriverJobDiscovery normal arm64 Compiling AuthAdminOAuth.swift (in target 'Auth' from project 'Supabase')
+
+SwiftDriverJobDiscovery normal arm64 Compiling SessionManager.swift (in target 'Auth' from project 'Supabase')
+
+SwiftDriverJobDiscovery normal arm64 Compiling AuthAdmin.swift (in target 'Auth' from project 'Supabase')
+
+SwiftDriverJobDiscovery normal arm64 Compiling AuthMFA.swift (in target 'Auth' from project 'Supabase')
+
+SwiftDriverJobDiscovery normal arm64 Compiling APIClient.swift (in target 'Auth' from project 'Supabase')
+
+SwiftDriverJobDiscovery normal arm64 Compiling AuthError.swift (in target 'Auth' from project 'Supabase')
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for Auth (in target 'Auth' from project 'Supabase')
+
+SwiftDriver\ Compilation\ Requirements Auth normal arm64 com.apple.xcode.tools.swift.compiler (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name Auth -Onone -enforce-exclusivity\=checked @/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/Objects-normal/arm64/Auth.SwiftFileList -DSWIFT_PACKAGE -DDEBUG -DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE -DXcode -enable-upcoming-feature ExistentialAny -enable-experimental-feature StrictConcurrency -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk -target arm64-apple-ios13.0-simulator -g -module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -suppress-warnings -index-store-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk/Developer/Library/Frameworks -c -j16 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/alanglass/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.2-23C53-7d00a8b37fbd7999ea79df8ebc024bf0.sdkstatcache -output-file-map /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/Objects-normal/arm64/Auth-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/Objects-normal/arm64/Auth.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -package-name supabase_swift -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/Objects-normal/arm64/Auth_const_extract_protocols.json -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/DerivedSources-normal/arm64 -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/DerivedSources/arm64 -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/DerivedSources -Xcc -DSWIFT_PACKAGE -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/Objects-normal/arm64/Auth-Swift.h -working-directory /Users/alanglass/_dev_local/HealthTracker/HealthTracker.xcodeproj -experimental-emit-module-separately -disable-cmo
+
+Copy /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/Auth.swiftmodule/arm64-apple-ios-simulator.abi.json /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/Objects-normal/arm64/Auth.abi.json (in target 'Auth' from project 'Supabase')
+    cd /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/Supabase.build/Debug-iphonesimulator/Auth.build/Objects-normal/arm64/Auth.abi.json /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/Auth.swiftmodule/arm64-apple-ios-simulator.abi.json
 
 SwiftDriver HealthTracker normal x86_64 com.apple.xcode.tools.swift.compiler (in target 'HealthTracker' from project 'HealthTracker')
     cd /Users/alanglass/_dev_local/HealthTracker
     builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name HealthTracker -Onone -enforce-exclusivity\=checked @/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/x86_64/HealthTracker.SwiftFileList -DDEBUG -default-isolation\=MainActor -enable-bare-slash-regex -enable-upcoming-feature DisableOutwardActorInference -enable-upcoming-feature InferSendableFromCaptures -enable-upcoming-feature GlobalActorIsolatedTypesUsability -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk -target x86_64-apple-ios26.2-simulator -g -module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/x86_64 -c -j16 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/alanglass/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.2-23C53-7d00a8b37fbd7999ea79df8ebc024bf0.sdkstatcache -output-file-map /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/x86_64/HealthTracker-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/x86_64/HealthTracker.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/x86_64/HealthTracker_const_extract_protocols.json -Xcc -iquote -Xcc /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker-generated-files.hmap -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker-own-target-headers.hmap -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker-c1403f0ceeacee94195e9b8910a535c9-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker-project-headers.hmap -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/DerivedSources-normal/x86_64 -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/DerivedSources/x86_64 -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/x86_64/HealthTracker-Swift.h -working-directory /Users/alanglass/_dev_local/HealthTracker -experimental-emit-module-separately -disable-cmo
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/EditProfileView.swift:124:1: error: Extraneous '}' at top level
-}
-^ (in target 'HealthTracker' from project 'HealthTracker')
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:69:13: error: Expressions are not allowed at the top level
-            Spacer()
-            ^ (in target 'HealthTracker' from project 'HealthTracker')
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:71:13: error: Expressions are not allowed at the top level
-            Button {
-            ^ (in target 'HealthTracker' from project 'HealthTracker')
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:83:9: error: Extraneous '}' at top level
-        }
-        ^
-         (in target 'HealthTracker' from project 'HealthTracker')
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:84:9: error: Expressions are not allowed at the top level
+/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:83:9: error: Expected declaration
         .padding()
         ^ (in target 'HealthTracker' from project 'HealthTracker')
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:88:5: error: Extraneous '}' at top level
-    }
-    ^
-     (in target 'HealthTracker' from project 'HealthTracker')
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:89:1: error: Extraneous '}' at top level
-}
-^ (in target 'HealthTracker' from project 'HealthTracker')
-
-SwiftDriver HealthTracker normal arm64 com.apple.xcode.tools.swift.compiler (in target 'HealthTracker' from project 'HealthTracker')
-    cd /Users/alanglass/_dev_local/HealthTracker
-    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name HealthTracker -Onone -enforce-exclusivity\=checked @/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/arm64/HealthTracker.SwiftFileList -DDEBUG -default-isolation\=MainActor -enable-bare-slash-regex -enable-upcoming-feature DisableOutwardActorInference -enable-upcoming-feature InferSendableFromCaptures -enable-upcoming-feature GlobalActorIsolatedTypesUsability -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk -target arm64-apple-ios26.2-simulator -g -module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/arm64 -c -j16 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/alanglass/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.2-23C53-7d00a8b37fbd7999ea79df8ebc024bf0.sdkstatcache -output-file-map /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/arm64/HealthTracker-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/arm64/HealthTracker.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/arm64/HealthTracker_const_extract_protocols.json -Xcc -iquote -Xcc /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker-generated-files.hmap -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker-own-target-headers.hmap -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker-c1403f0ceeacee94195e9b8910a535c9-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker-project-headers.hmap -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/DerivedSources-normal/arm64 -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/DerivedSources/arm64 -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/arm64/HealthTracker-Swift.h -working-directory /Users/alanglass/_dev_local/HealthTracker -experimental-emit-module-separately -disable-cmo
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/EditProfileView.swift:124:1: error: Extraneous '}' at top level
-}
-^ (in target 'HealthTracker' from project 'HealthTracker')
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:69:13: error: Expressions are not allowed at the top level
-            Spacer()
-            ^ (in target 'HealthTracker' from project 'HealthTracker')
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:71:13: error: Expressions are not allowed at the top level
-            Button {
-            ^ (in target 'HealthTracker' from project 'HealthTracker')
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:83:9: error: Extraneous '}' at top level
-        }
-        ^
-         (in target 'HealthTracker' from project 'HealthTracker')
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:84:9: error: Expressions are not allowed at the top level
-        .padding()
-        ^ (in target 'HealthTracker' from project 'HealthTracker')
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:88:5: error: Extraneous '}' at top level
-    }
-    ^
-     (in target 'HealthTracker' from project 'HealthTracker')
-/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:89:1: error: Extraneous '}' at top level
+/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:10:8: note: In declaration of 'MorningBriefingView'
+struct MorningBriefingView: View {
+       ^ (in target 'HealthTracker' from project 'HealthTracker')
+/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:88:1: error: Extraneous '}' at top level
 }
 ^ (in target 'HealthTracker' from project 'HealthTracker')
 
@@ -309,13 +348,18 @@ CompileAssetCatalogVariant thinned /Users/alanglass/Library/Developer/Xcode/Deri
     cd /Users/alanglass/_dev_local/HealthTracker
     /Applications/Xcode.app/Contents/Developer/usr/bin/actool /Users/alanglass/_dev_local/HealthTracker/HealthTracker/Assets.xcassets --compile /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/assetcatalog_output/thinned --output-format human-readable-text --notices --warnings --export-dependency-info /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/assetcatalog_dependencies_thinned --output-partial-info-plist /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/assetcatalog_generated_info.plist_thinned --app-icon AppIcon --accent-color AccentColor --compress-pngs --enable-on-demand-resources YES --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 26.2 --platform iphonesimulator
 
-SwiftEmitModule normal arm64 Emitting\ module\ for\ Auth (in target 'Auth' from project 'Supabase')
-
-SwiftCompile normal arm64 Compiling\ AuthClientConfiguration.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/AuthClientConfiguration.swift (in target 'Auth' from project 'Supabase')
-
-SwiftCompile normal arm64 Compiling\ Types.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/Types.swift (in target 'Auth' from project 'Supabase')
-
-SwiftCompile normal arm64 Compiling\ AuthClient.swift /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/SourcePackages/checkouts/supabase-swift/Sources/Auth/AuthClient.swift (in target 'Auth' from project 'Supabase')
+SwiftDriver HealthTracker normal arm64 com.apple.xcode.tools.swift.compiler (in target 'HealthTracker' from project 'HealthTracker')
+    cd /Users/alanglass/_dev_local/HealthTracker
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name HealthTracker -Onone -enforce-exclusivity\=checked @/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/arm64/HealthTracker.SwiftFileList -DDEBUG -default-isolation\=MainActor -enable-bare-slash-regex -enable-upcoming-feature DisableOutwardActorInference -enable-upcoming-feature InferSendableFromCaptures -enable-upcoming-feature GlobalActorIsolatedTypesUsability -enable-upcoming-feature MemberImportVisibility -enable-upcoming-feature InferIsolatedConformances -enable-upcoming-feature NonisolatedNonsendingByDefault -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.2.sdk -target arm64-apple-ios26.2-simulator -g -module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator -emit-localized-strings -emit-localized-strings-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/arm64 -c -j16 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/alanglass/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex/iphonesimulator26.2-23C53-7d00a8b37fbd7999ea79df8ebc024bf0.sdkstatcache -output-file-map /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/arm64/HealthTracker-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -sdk-module-cache-path /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/arm64/HealthTracker.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/alanglass/Library/Developer/Xcode/DerivedData/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/arm64/HealthTracker_const_extract_protocols.json -Xcc -iquote -Xcc /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker-generated-files.hmap -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker-own-target-headers.hmap -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker-c1403f0ceeacee94195e9b8910a535c9-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/HealthTracker-project-headers.hmap -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/DerivedSources-normal/arm64 -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/DerivedSources/arm64 -Xcc -I/Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/alanglass/Library/Developer/Xcode/DerivedData/HealthTracker-dtsqbapzqzqblleocyxliksziqlc/Build/Intermediates.noindex/HealthTracker.build/Debug-iphonesimulator/HealthTracker.build/Objects-normal/arm64/HealthTracker-Swift.h -working-directory /Users/alanglass/_dev_local/HealthTracker -experimental-emit-module-separately -disable-cmo
+/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:83:9: error: Expected declaration
+        .padding()
+        ^ (in target 'HealthTracker' from project 'HealthTracker')
+/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:10:8: note: In declaration of 'MorningBriefingView'
+struct MorningBriefingView: View {
+       ^ (in target 'HealthTracker' from project 'HealthTracker')
+/Users/alanglass/_dev_local/HealthTracker/HealthTracker/MorningBriefingView.swift:88:1: error: Extraneous '}' at top level
+}
+^ (in target 'HealthTracker' from project 'HealthTracker')
 
 ** BUILD FAILED **
 

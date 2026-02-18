@@ -20,6 +20,8 @@ struct ContentView: View {
     @State private var pendingAuthorization = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     
+    @ObservedObject private var briefingManager = MorningBriefingManager.shared
+    
     @Environment(\.scenePhase) var scenePhase
 
     var body: some View {
@@ -85,6 +87,15 @@ struct ContentView: View {
                         Button("Not Now", role: .cancel) { }
                     } message: {
                         Text("Would you like to import your health data for the last 30 days? This will sync your steps, flights, calories, workouts, and activity rings.")
+                    }
+                    .sheet(isPresented: $briefingManager.shouldShowPopup) {
+                        if let data = briefingManager.briefingData {
+                            MorningBriefingView(data: data) {
+                                briefingManager.dismissPopup()
+                            }
+                            .presentationDetents([.fraction(0.6), .large])
+                            .presentationDragIndicator(.visible)
+                        }
                     }
                 }
             } else {
@@ -788,6 +799,17 @@ struct ProfileView: View {
                             Image(systemName: "arrow.counterclockwise.circle.fill")
                                 .foregroundStyle(.orange)
                             Text("Reset Onboarding (Debug)")
+                            Spacer()
+                        }
+                    }
+                    
+                    Button {
+                        MorningBriefingManager.shared.resetBriefingStatus()
+                    } label: {
+                        HStack {
+                            Image(systemName: "sun.max.fill")
+                                .foregroundStyle(.orange)
+                            Text("Reset Morning Briefing (Debug)")
                             Spacer()
                         }
                     }
