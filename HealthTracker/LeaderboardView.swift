@@ -109,11 +109,48 @@ class LeaderboardViewModel: ObservableObject {
         
         isLoading = false
     }
+    
+    func getMetricValue(for entry: LeaderboardEntry) -> Double {
+        switch selectedMetric {
+        case .steps: return Double(entry.steps)
+        case .calories: return Double(entry.calories)
+        case .distance: return entry.distance
+        case .flights: return Double(entry.flights)
+        case .exercise: return Double(entry.exercise_minutes)
+        case .workouts: return Double(entry.workouts_count)
+        }
+    }
+    
+    func formatValue(for entry: LeaderboardEntry) -> String {
+        let value = getMetricValue(for: entry)
+        let unit = selectedMetric.unit
+        
+        if selectedMetric == .distance {
+             return String(format: "%.2f %@", value, unit)
+        } else {
+             return String(format: "%.0f %@", value, unit)
+        }
+    }
+    
+    func copyToClipboard() {
+        var text = "🏆 \(selectedMetric.displayName) Leaderboard\nAs of: \(Date().formatted(date: .abbreviated, time: .shortened))\n\n"
+        
+        for (index, entry) in entries.enumerated() {
+            let rank = index + 1
+            let name = entry.profile?.display_name ?? entry.profile?.email ?? "Unknown"
+            let valueStr = formatValue(for: entry)
+            
+            text += "\(rank). \(name) - \(valueStr)\n"
+        }
+        
+        UIPasteboard.general.string = text
+    }
 }
 
 struct LeaderboardView: View {
     let familyId: UUID
     @StateObject private var viewModel = LeaderboardViewModel()
+    @State private var showCopiedAlert = false
     
     var body: some View {
         VStack {
@@ -126,9 +163,38 @@ struct LeaderboardView: View {
             .padding(.horizontal)
             .padding(.top)
             
-            Text("Today's \(viewModel.selectedMetric.displayName) Leaderboard")
-                .font(.headline)
-                .padding(.top, 8)
+            HStack {
+                Text("Today's \(viewModel.selectedMetric.displayName) Leaderboard")
+                    .font(.headline)
+                
+                Spacer()
+                
+                Button {
+                    viewModel.copyToClipboard()
+                    showCopiedAlert = true
+                    // Auto dismiss after 2s
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        showCopiedAlert = false
+                    }
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.body)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.blue)
+            }
+            .padding(.top, 8)
+            .padding(.horizontal)
+            
+            if showCopiedAlert {
+                 Text("Copied to clipboard!")
+                    .font(.caption)
+                    .foregroundStyle(.white)
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 12)
+                    .background(Capsule().fill(Color.black.opacity(0.7)))
+                    .transition(.opacity)
+            }
             
             if viewModel.isLoading {
                 ProgressView()
@@ -151,7 +217,7 @@ struct LeaderboardView: View {
                             VStack(alignment: .leading) {
                                 Text(entry.profile?.display_name ?? entry.profile?.email ?? "Unknown")
                                     .fontWeight(.semibold)
-                                Text(detailText(for: entry))
+                                Text(viewModel.formatValue(for: entry))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
@@ -159,9 +225,9 @@ struct LeaderboardView: View {
                             Spacer()
                             
                             // Visualize relative progress
-                            let maxVal = getMetricValue(for: viewModel.entries.first!)
+                            let maxVal = viewModel.getMetricValue(for: viewModel.entries.first!)
                             if maxVal > 0 {
-                                let currentVal = getMetricValue(for: entry)
+                                let currentVal = viewModel.getMetricValue(for: entry)
                                 let progress = currentVal / maxVal
                                 Circle()
                                     .trim(from: 0, to: progress)
@@ -185,33 +251,12 @@ struct LeaderboardView: View {
                 .listStyle(.plain)
             }
         }
+        .animation(.easeInOut, value: showCopiedAlert)
         .task {
             await viewModel.fetchLeaderboard(for: familyId)
         }
         .refreshable {
             await viewModel.fetchLeaderboard(for: familyId)
-        }
-    }
-    
-    private func getMetricValue(for entry: LeaderboardEntry) -> Double {
-        switch viewModel.selectedMetric {
-        case .steps: return Double(entry.steps)
-        case .calories: return Double(entry.calories)
-        case .distance: return entry.distance
-        case .flights: return Double(entry.flights)
-        case .exercise: return Double(entry.exercise_minutes)
-        case .workouts: return Double(entry.workouts_count)
-        }
-    }
-    
-    private func detailText(for entry: LeaderboardEntry) -> String {
-        let value = getMetricValue(for: entry)
-        let unit = viewModel.selectedMetric.unit
-        
-        if viewModel.selectedMetric == .distance {
-             return String(format: "%.2f %@", value, unit)
-        } else {
-             return String(format: "%.0f %@", value, unit)
         }
     }
 }

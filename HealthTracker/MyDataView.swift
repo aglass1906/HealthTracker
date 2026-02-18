@@ -22,9 +22,9 @@ enum TimeScope: String, CaseIterable, Identifiable {
 
 struct MyDataView: View {
     @StateObject private var dataStore = HealthDataStore.shared
-    @State private var selectedScope: TimeScope = .week
+    @Binding var selectedScope: TimeScope
+    @Binding var referenceDate: Date
     @State private var selectedMetric: HealthMetric = .steps
-    @State private var referenceDate = Date()
     
     // For Custom Range
     @State private var customStartDate = Date()

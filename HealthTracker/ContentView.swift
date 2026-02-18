@@ -20,6 +20,11 @@ struct ContentView: View {
     @State private var pendingAuthorization = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     
+    // My Data View State (Shared for deep-linking)
+    @State private var myDataScope: TimeScope = .week
+    @State private var myDataReferenceDate = Date()
+    @State private var communityTab = 0
+    
     @ObservedObject private var briefingManager = MorningBriefingManager.shared
     
     @Environment(\.scenePhase) var scenePhase
@@ -27,23 +32,31 @@ struct ContentView: View {
     var body: some View {
         Group {
             if authManager.isAuthenticated {
-                if !hasCompletedOnboarding {
+                    if !hasCompletedOnboarding {
                     OnboardingView()
                 } else {
                     TabView(selection: $selectedTab) {
-                        DashboardView()
+                        DashboardView(
+                            selectedTab: $selectedTab,
+                            myDataScope: $myDataScope,
+                            myDataReferenceDate: $myDataReferenceDate,
+                            communityTab: $communityTab
+                        )
                             .tabItem {
                                 Label("Dashboard", systemImage: "chart.bar.fill")
                             }
                             .tag(0)
                         
-                        MyDataView()
+                        MyDataView(
+                            selectedScope: $myDataScope,
+                            referenceDate: $myDataReferenceDate
+                        )
                             .tabItem {
                                 Label("My Data", systemImage: "chart.xyaxis.line")
                             }
                             .tag(1)
                         
-                        CommunityView()
+                        CommunityView(communityTab: $communityTab)
                             .tabItem {
                                 Label("Community", systemImage: "person.3.fill")
                             }
@@ -106,9 +119,14 @@ struct ContentView: View {
 }
 
 struct DashboardView: View {
+    @Binding var selectedTab: Int
+    @Binding var myDataScope: TimeScope
+    @Binding var myDataReferenceDate: Date
+    @Binding var communityTab: Int
+    
     @StateObject private var dataStore = HealthDataStore.shared
     @StateObject private var healthKitManager = HealthKitManager.shared
-    @State private var showingDailySummary = false
+    @StateObject private var communityViewModel = DashboardCommunityViewModel()
     @State private var selectedWorkout: WorkoutData?
     
     var body: some View {
@@ -134,8 +152,8 @@ struct DashboardView: View {
                         }
                         .padding(.bottom, 4)
 
-                        Text("Today")
-                            .font(.largeTitle)
+                        Text("Today's Dashboard")
+                            .font(.title)
                             .fontWeight(.bold)
                         Text(Date().formatted(date: .abbreviated, time: .omitted))
                             .font(.subheadline)
@@ -144,18 +162,42 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
                     
-                    // Activity Rings
-                    if let rings = dataStore.todayData?.activityRings {
-                        ActivityRingsView(rings: rings)
-                            .padding(.horizontal)
-                        
-                        DailyGoalsCard(data: dataStore.todayData)
+                    // 1. Compact Activity Card (Links to My Data)
+                    MiniActivityCard(
+                        dataStore: dataStore,
+                        selectedTab: $selectedTab,
+                        myDataScope: $myDataScope,
+                        myDataReferenceDate: $myDataReferenceDate
+                    )
+                        .padding(.horizontal)
+                    
+                    // 2. Active Challenge Card
+                    if let challenge = communityViewModel.activeChallenge {
+                        ActiveChallengeCard(
+                            challenge: challenge,
+                            selectedTab: $selectedTab,
+                            communityTab: $communityTab
+                        )
                             .padding(.horizontal)
                     }
                     
-
+                    // 3. Yesterday's Champions
+                    YesterdayChampionsCard(
+                        stepChampion: communityViewModel.stepChampion,
+                        flightChampion: communityViewModel.flightChampion,
+                        workoutChampion: communityViewModel.workoutChampion
+                    )
+                    .padding(.horizontal)
                     
-                    // Recent Workouts
+                    // 4. Feed Updates
+                    FeedSummaryCard(
+                        events: communityViewModel.recentEvents,
+                        selectedTab: $selectedTab,
+                        communityTab: $communityTab
+                    )
+                        .padding(.horizontal)
+                    
+                    // Recent Workouts (Keep existing)
                     if let workouts = dataStore.todayData?.workouts, !workouts.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Today's Workouts")
@@ -164,7 +206,7 @@ struct DashboardView: View {
                                 .padding(.horizontal)
                             
                             VStack(spacing: 12) {
-                                ForEach(workouts.prefix(5)) { workout in
+                                ForEach(workouts.prefix(3)) { workout in
                                     WorkoutRow(workout: workout)
                                         .onTapGesture {
                                             selectedWorkout = workout
@@ -233,25 +275,6 @@ struct DashboardView: View {
                         }
                     }
                     
-                    // Daily Summary Button
-                    if !dataStore.allDailyData.isEmpty {
-                        Button {
-                            showingDailySummary = true
-                        } label: {
-                            HStack {
-                                Image(systemName: "calendar")
-                                Text("View Daily Summary")
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                            }
-                            .padding()
-                            .background {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.blue.opacity(0.1))
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
                     
                     // Debug Error Message
                     if let error = dataStore.lastErrorMessage {
@@ -304,9 +327,6 @@ struct DashboardView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showingDailySummary) {
-                DailySummaryView(date: Date())
-            }
             .sheet(item: $dataStore.newlyFinishedWorkout) { workout in
                 WorkoutSummaryView(workout: workout, profile: nil) // Current user
             }
@@ -319,6 +339,10 @@ struct DashboardView: View {
                         .scaleEffect(1.5)
                 }
             }
+        }
+        .task {
+            // Load community data when dashboard appears
+            await communityViewModel.loadAllData()
         }
     }
     
@@ -497,6 +521,10 @@ struct WorkoutRow: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(.systemBackground))
                 .shadow(color: .black.opacity(0.03), radius: 4, x: 0, y: 1)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(.separator), lineWidth: 1)
+                }
         }
     }
     

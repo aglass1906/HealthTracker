@@ -22,6 +22,14 @@ struct SocialEvent: Codable, Identifiable {
     let profile: Profile?
 }
 
+extension String {
+    func dateValue() -> Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: self) ?? ISO8601DateFormatter().date(from: self) ?? Date()
+    }
+}
+
 enum FeedTimeframe: String, CaseIterable, Identifiable {
     case last7Days = "Last 7 Days"
     case last30Days = "Last 30 Days"

@@ -186,7 +186,7 @@ class FamilyViewModel: ObservableObject {
 
 struct CommunityView: View {
     @StateObject private var viewModel = FamilyViewModel()
-    @State private var selectedTab = 0
+    @Binding var communityTab: Int
     @State private var showingSettings = false
     
     var body: some View {
@@ -197,7 +197,7 @@ struct CommunityView: View {
                 } else if let family = viewModel.family {
                     // Active Community View
                     VStack(spacing: 0) {
-                        Picker("View", selection: $selectedTab) {
+                        Picker("View", selection: $communityTab) {
                             Text("Feed").tag(0)
                             Text("Leaderboard").tag(1)
                             Text("Challenges").tag(2)
@@ -205,7 +205,7 @@ struct CommunityView: View {
                         .pickerStyle(.segmented)
                         .padding()
                         
-                        TabView(selection: $selectedTab) {
+                        TabView(selection: $communityTab) {
                             SocialFeedView(familyId: family.id)
                                 .tag(0)
                             
