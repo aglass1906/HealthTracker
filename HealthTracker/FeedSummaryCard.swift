@@ -92,9 +92,11 @@ struct FeedSummaryCard: View {
         case "challenge_created":
             return "\(name) created a challenge!"
         case "challenge_won":
-            return "\(name) won a challenge!"
+            let challengeWinner = event.payload?["winner_name"] ?? name
+            return "\(challengeWinner) won a challenge!"
         case "round_winner":
-            return "\(name) won a round!"
+            let roundWinner = event.payload?["winner_name"] ?? name
+            return "\(roundWinner) won a round!"
         case "goal_met":
             return "\(name) met a goal!"
         case "workout_finished":

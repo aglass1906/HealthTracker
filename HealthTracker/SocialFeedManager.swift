@@ -108,47 +108,20 @@ class SocialFeedManager {
         
         func check(type: String, value: Double, threshold: Double, unit: String, displayValue: String) {
             let key = "posted_goal_\(type)_\(today)"
-            
+
             // 1. Local Debounce
             if UserDefaults.standard.bool(forKey: key) { return }
-            
+
             if value >= threshold {
+                // Set key immediately (before Task) to prevent concurrent calls racing through
+                UserDefaults.standard.set(true, forKey: key)
+
                 Task {
-                    // 2. Server Check
-                    if await hasPostedToday(type: "goal_met", familyId: familyId) {
-                         // Note: "goal_met" is generic, maybe we want to check specifically for THIS goal type?
-                         // The DB type is "goal_met", payload has "goal": "Steps".
-                         // hasPostedToday checks TYPE only.
-                         // Let's refine hasPostedToday or just check payload manually here?
-                         // Actually, simplicity: Let's check if we posted "goal_met" with payload->>goal == type
-                         // Supabase JSON filtering is tricky.
-                         // Let's trust local for Goal Granularity, but maybe check total spam?
-                         // OR: Implement specific check.
-                         // For now, let's keep it simple: Trust Local for specific goal types,
-                         // but use Server Check for things like "Daily Workout" or "Join".
-                         
-                         // Re-evaluating plan: Plan said "Update checkAndPostGoal... to call hasPostedToday".
-                         // But multiple goals can be met in a day.
-                         // So checking generic "goal_met" prevents meeting Steps AND Calories? That's bad.
-                         // We need to check if *this specific goal* was posted.
-                         // JSON filtering: .contains("payload", value: "{\"goal\": \"\(type)\"}")
-                         // This is safer.
-                    }
-                    
-                    // Actually, let's skip strict server check for Goals for now to avoid complexity,
-                    // as they are less critical than "User Won Challenge" spam.
-                    // Rely on Local for goals is usually fine as long as we don't wipe UserDefaults often.
-                    
-                    // BUT for Workouts and Rings, it's one per day/session.
-                    
                     let payload = [
                         "goal": type,
                         "value": displayValue
                     ]
-                    
-                    // Optimistic post (trusting local check for now for goals)
                     await post(type: .goal_met, familyId: familyId, payload: payload)
-                    UserDefaults.standard.set(true, forKey: key)
                 }
             }
         }
@@ -170,17 +143,15 @@ class SocialFeedManager {
         func check(ring: RingData, type: EventType, keySuffix: String) {
             let key = "posted_ring_\(keySuffix)_\(today)"
             if UserDefaults.standard.bool(forKey: key) { return }
-            
+
             if ring.value >= ring.goal && ring.goal > 0 {
+                // Set key immediately (before Task) to prevent concurrent calls racing through
+                UserDefaults.standard.set(true, forKey: key)
+
                 Task {
-                    // Server Check
-                    if await hasPostedToday(type: type.rawValue, familyId: familyId) {
-                        UserDefaults.standard.set(true, forKey: key)
-                        return
-                    }
-                    
+                    // Server Check (still useful as cross-device/session guard)
+                    if await hasPostedToday(type: type.rawValue, familyId: familyId) { return }
                     await post(type: type, familyId: familyId)
-                    UserDefaults.standard.set(true, forKey: key)
                 }
             }
         }
@@ -194,32 +165,28 @@ class SocialFeedManager {
     
     func checkAndPostWorkout(workout: WorkoutData, familyId: UUID) {
         let key = "posted_workout_\(workout.startDate.timeIntervalSince1970)_\(workout.workoutType)"
-        
+
         if UserDefaults.standard.bool(forKey: key) { return }
-        
+
         var payload: [String: String] = [
             "workout_type": workout.workoutType,
             "duration": formatDuration(workout.duration),
             "duration_seconds": String(workout.duration)
         ]
-        
+
         if let calories = workout.totalEnergyBurned {
             payload["calories"] = String(format: "%.0f", calories)
         }
-        
+
         if let distance = workout.totalDistance {
             payload["distance"] = String(format: "%.2f", distance / 1000) // km
         }
-        
+
+        // Set key immediately (before Task) to prevent concurrent calls racing through
+        UserDefaults.standard.set(true, forKey: key)
+
         Task {
-            // Check if ANY workout posted today? No, users can do multiple workouts.
-            // But we don't want to double post the SAME workout (same UUID/timestamp).
-            // Our hasPostedToday checks generic TYPE.
-            // Checking specific workout via payload in DB is expensive.
-            // Let's stick to Local + maybe checking if "workout_finished" count > 5 to prevent spam loop?
-            
             await post(type: .workout_finished, familyId: familyId, payload: payload)
-            UserDefaults.standard.set(true, forKey: key)
         }
     }
     

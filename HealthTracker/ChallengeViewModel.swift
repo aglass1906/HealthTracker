@@ -784,18 +784,20 @@ class ChallengeViewModel: ObservableObject {
                     .update(["winner_id": firstWinner.id.uuidString, "status": "completed"])
                     .eq("id", value: round.id)
                     .execute()
-                
-                // Post to feed for each winner
-                // Need to re-fetch profiles? Or just use what we have in ChallengeParticipant?
-                // ChallengeParticipant has 'profile' which is `Profile`. Perfect.
+
+                // Guard against duplicate feed posts for this round across concurrent callers
+                let roundPostKey = "posted_round_winner_\(round.id.uuidString)"
+                guard !UserDefaults.standard.bool(forKey: roundPostKey) else { return }
+                UserDefaults.standard.set(true, forKey: roundPostKey)
+
                 for winner in winners {
-                    var payload = [
+                    let payload: [String: String] = [
                         "challenge_title": challenge.title,
                         "round_number": String(round.round_number),
                         "winner_name": winner.profile.display_name ?? "Unknown",
                         "challenge_id": challenge.id.uuidString
                     ]
-                    
+
                     await SocialFeedManager.shared.post(
                         type: .round_winner,
                         familyId: challenge.family_id,
