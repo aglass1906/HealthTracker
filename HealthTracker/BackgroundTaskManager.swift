@@ -50,45 +50,29 @@ class BackgroundTaskManager {
     // MARK: - HealthKit Background Delivery
 
     private var pendingCompletions: [() -> Void] = []
-    private var isDebouncing = false
-    
+    private var isCoalescing = false
+
     @MainActor
     func handleHealthKitUpdate(completion: @escaping () -> Void) {
-        // Safety valve: Prevent queue from growing too large (e.g. infinite loop of updates)
-        if pendingCompletions.count >= 100 {
-            print("⚠️ High volume of HealthKit updates (\(pendingCompletions.count)). Flushing queue.")
-            completion()
-            // Clear existing queue to free memory, but keep debouncing active
-            let oldCompletions = pendingCompletions
-            pendingCompletions.removeAll()
-            oldCompletions.forEach { $0() }
-            return
-        }
-
         print("⚡️ HealthKit background delivery received - queueing")
-        
         pendingCompletions.append(completion)
-        
-        if !isDebouncing {
-            isDebouncing = true
-            
-            Task {
-                // Wait 2 seconds to collect other updates (e.g. startup burst)
-                try? await Task.sleep(nanoseconds: 2 * 1_000_000_000)
-                
-                print("⚡️ Executing coalesced background sync")
-                await performBackgroundSync()
-                
-                // Call all completions
-                let completionsToCall = pendingCompletions
-                pendingCompletions.removeAll()
-                isDebouncing = false
-                
-                for completion in completionsToCall {
-                    completion()
-                }
-                print("✅ Called \(completionsToCall.count) completion handlers after coalesced sync")
-            }
+
+        // If a sync is already in flight, just queue the completion — it will
+        // be called when the current sync finishes.
+        guard !isCoalescing else { return }
+        isCoalescing = true
+
+        Task {
+            print("⚡️ Executing coalesced background sync")
+            await performBackgroundSync()
+
+            // Call all completions that accumulated while the sync ran.
+            let completionsToCall = pendingCompletions
+            pendingCompletions.removeAll()
+            isCoalescing = false
+
+            for c in completionsToCall { c() }
+            print("✅ Called \(completionsToCall.count) HealthKit completion handlers after sync")
         }
     }
     
@@ -142,7 +126,6 @@ class BackgroundTaskManager {
         
         // Get today's date
         let today = Calendar.current.startOfDay(for: Date())
-        let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: today)!
         
         // 3. Fetch today's data
         do {
@@ -165,12 +148,23 @@ class BackgroundTaskManager {
                 workouts: workoutsValue
             )
             
-            // 4. Upload to Supabase
-            await SyncManager.shared.uploadDailyStats(data: todayData)
-            await SyncManager.shared.syncWorkouts(workouts: workoutsValue)
-            await SyncManager.shared.syncRings(rings: ringsValue)
-            
-            // 5. Update Morning Briefing Notification
+            // 4. Upload to Supabase (single profile fetch for all three operations)
+            await SyncManager.shared.syncAll(data: todayData, workouts: workoutsValue, rings: ringsValue)
+
+            // 5. Update local HealthDataStore so the UI reflects fresh data
+            await MainActor.run {
+                HealthDataStore.shared.todayData = todayData
+                let calendar = Calendar.current
+                if let index = HealthDataStore.shared.allDailyData.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: today) }) {
+                    HealthDataStore.shared.allDailyData[index] = todayData
+                } else {
+                    HealthDataStore.shared.allDailyData.append(todayData)
+                    HealthDataStore.shared.allDailyData.sort { $0.date > $1.date }
+                }
+                HealthDataStore.shared.saveData()
+            }
+
+            // 6. Update Morning Briefing Notification
             let briefingManager = MorningBriefingManager.shared
             briefingManager.checkBriefingStatus()
             briefingManager.rescheduleNotification()

@@ -14,7 +14,12 @@ struct HealthTrackerApp: App {
     init() {
         // Register background tasks
         BackgroundTaskManager.shared.registerBackgroundTasks()
-        
+
+        // Schedule the first background refresh immediately at launch so it
+        // is queued even if the user never explicitly backgrounds the app
+        // (e.g. after a phone reboot or app kill/relaunch).
+        BackgroundTaskManager.shared.scheduleBackgroundRefresh()
+
         // Initialize HealthKit manager to start observers if authorized
         _ = HealthKitManager.shared
     }
@@ -45,14 +50,16 @@ struct HealthTrackerApp: App {
                     }
                 } else if authManager.isAuthenticated {
                     ContentView()
-                        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
-                            BackgroundTaskManager.shared.scheduleBackgroundRefresh()
-                        }
                 } else {
                     LoginView()
                 }
             }
             .animation(.easeInOut, value: authManager.isRestoringSession)
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+                // Re-schedule on every background transition to keep the
+                // refresh chain alive regardless of auth state.
+                BackgroundTaskManager.shared.scheduleBackgroundRefresh()
+            }
         }
     }
 }

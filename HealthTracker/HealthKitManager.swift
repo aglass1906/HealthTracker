@@ -33,11 +33,14 @@ class HealthKitManager: ObservableObject {
         guard let stepCount = HKObjectType.quantityType(forIdentifier: .stepCount),
               let flightsClimbed = HKObjectType.quantityType(forIdentifier: .flightsClimbed),
               let activeEnergy = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned),
-              let distance = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning) else {
+              let distance = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning),
+              let exerciseTime = HKObjectType.quantityType(forIdentifier: .appleExerciseTime),
+              let standHour = HKObjectType.categoryType(forIdentifier: .appleStandHour) else {
             return []
         }
         let workoutType = HKObjectType.workoutType()
-        return [stepCount, flightsClimbed, activeEnergy, distance, workoutType]
+        let activitySummaryType = HKObjectType.activitySummaryType()
+        return [stepCount, flightsClimbed, activeEnergy, distance, workoutType, activitySummaryType, exerciseTime, standHour]
     }()
     
     private init() {
@@ -100,7 +103,7 @@ class HealthKitManager: ObservableObject {
             }
             
             // 2. Execute Observer Query
-            let query = HKObserverQuery(sampleType: type, predicate: nil) { [weak self] query, completionHandler, error in
+            let query = HKObserverQuery(sampleType: type, predicate: nil) { _, completionHandler, error in
                 if let error = error {
                     print("❌ Observer query failed for \(type.identifier): \(error.localizedDescription)")
                     completionHandler()
@@ -136,9 +139,9 @@ class HealthKitManager: ObservableObject {
         let predicate = HKQuery.predicateForSamples(
             withStart: startOfDay,
             end: endOfDay,
-            options: [] // Relaxed from .strictStartDate
+            options: .strictStartDate
         )
-        
+
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsQuery(
                 quantityType: stepCountType,
@@ -172,9 +175,9 @@ class HealthKitManager: ObservableObject {
         let predicate = HKQuery.predicateForSamples(
             withStart: startOfDay,
             end: endOfDay,
-            options: [] // Relaxed from .strictStartDate
+            options: .strictStartDate
         )
-        
+
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsQuery(
                 quantityType: flightsType,
@@ -207,9 +210,9 @@ class HealthKitManager: ObservableObject {
         let predicate = HKQuery.predicateForSamples(
             withStart: startOfDay,
             end: endOfDay,
-            options: [] // Relaxed from .strictStartDate
+            options: .strictStartDate
         )
-        
+
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsQuery(
                 quantityType: activeEnergyType,
@@ -242,9 +245,9 @@ class HealthKitManager: ObservableObject {
         let predicate = HKQuery.predicateForSamples(
             withStart: startOfDay,
             end: endOfDay,
-            options: []
+            options: .strictStartDate
         )
-        
+
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsQuery(
                 quantityType: distanceType,
@@ -267,32 +270,63 @@ class HealthKitManager: ObservableObject {
     }
     
     // MARK: - Activity Rings
-    
+
     func fetchActivityRings(for date: Date = Date()) async throws -> ActivityRings {
+        // Primary: use HKActivitySummary which contains the user's actual goals and Apple Watch ring data
+        if let summary = try? await fetchActivitySummary(for: date) {
+            let moveValue = summary.activeEnergyBurned.doubleValue(for: .kilocalorie())
+            let moveGoal = summary.activeEnergyBurnedGoal.doubleValue(for: .kilocalorie())
+            let exerciseValue = summary.appleExerciseTime.doubleValue(for: .minute())
+            let exerciseGoal = summary.appleExerciseTimeGoal.doubleValue(for: .minute())
+            let standValue = summary.appleStandHours.doubleValue(for: .count())
+            let standGoal = summary.appleStandHoursGoal.doubleValue(for: .count())
+
+            let safeMoveGoal = moveGoal > 0 ? moveGoal : 600
+            let safeExerciseGoal = exerciseGoal > 0 ? exerciseGoal : 30
+            let safeStandGoal = standGoal > 0 ? standGoal : 12
+
+            return ActivityRings(
+                move: RingData(value: moveValue, goal: safeMoveGoal, progress: min(moveValue / safeMoveGoal, 1.0)),
+                exercise: RingData(value: exerciseValue, goal: safeExerciseGoal, progress: min(exerciseValue / safeExerciseGoal, 1.0)),
+                stand: RingData(value: standValue, goal: safeStandGoal, progress: min(standValue / safeStandGoal, 1.0))
+            )
+        }
+
+        // Fallback: compute from raw metrics (no Apple Watch or no summary available)
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
-        
-        // Fetch active energy (Move ring - Red)
+
         let activeEnergy = try await fetchCalories(for: startOfDay, end: endOfDay)
-        let moveGoal: Double = 600 // Default goal, can be customized
-        let moveProgress = min(activeEnergy / moveGoal, 1.0)
-        
-        // Fetch exercise minutes (Exercise ring - Green)
+        let moveGoal: Double = 600
         let exerciseMinutes = try await fetchExerciseMinutes(for: startOfDay, end: endOfDay)
-        let exerciseGoal: Double = 30 // Default 30 minutes
-        let exerciseProgress = min(exerciseMinutes / exerciseGoal, 1.0)
-        
-        // Fetch stand hours (Stand ring - Blue)
+        let exerciseGoal: Double = 30
         let standHours = try await fetchStandHours(for: startOfDay, end: endOfDay)
-        let standGoal: Double = 12 // Default 12 hours
-        let standProgress = min(standHours / standGoal, 1.0)
-        
+        let standGoal: Double = 12
+
         return ActivityRings(
-            move: RingData(value: activeEnergy, goal: moveGoal, progress: moveProgress),
-            exercise: RingData(value: exerciseMinutes, goal: exerciseGoal, progress: exerciseProgress),
-            stand: RingData(value: standHours, goal: standGoal, progress: standProgress)
+            move: RingData(value: activeEnergy, goal: moveGoal, progress: min(activeEnergy / moveGoal, 1.0)),
+            exercise: RingData(value: exerciseMinutes, goal: exerciseGoal, progress: min(exerciseMinutes / exerciseGoal, 1.0)),
+            stand: RingData(value: standHours, goal: standGoal, progress: min(standHours / standGoal, 1.0))
         )
+    }
+
+    private func fetchActivitySummary(for date: Date) async throws -> HKActivitySummary? {
+        let calendar = Calendar.current
+        var components = calendar.dateComponents([.era, .year, .month, .day], from: date)
+        components.calendar = calendar
+        let predicate = HKQuery.predicateForActivitySummary(with: components)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKActivitySummaryQuery(predicate: predicate) { _, summaries, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume(returning: summaries?.first)
+            }
+            self.healthStore.execute(query)
+        }
     }
     
     private func fetchCalories(for start: Date, end: Date) async throws -> Double {
@@ -300,8 +334,8 @@ class HealthKitManager: ObservableObject {
             throw HealthKitError.invalidType
         }
         
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
-        
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsQuery(
                 quantityType: activeEnergyType,
@@ -321,39 +355,55 @@ class HealthKitManager: ObservableObject {
     }
     
     private func fetchExerciseMinutes(for start: Date, end: Date) async throws -> Double {
-        let workoutType = HKObjectType.workoutType()
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
-        
+        guard let exerciseTimeType = HKObjectType.quantityType(forIdentifier: .appleExerciseTime) else {
+            return 0
+        }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+
         return try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(
-                sampleType: workoutType,
-                predicate: predicate,
-                limit: 50, // Limit to reasonable count to avoid OOM
-                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
-            ) { _, samples, error in
+            let query = HKStatisticsQuery(
+                quantityType: exerciseTimeType,
+                quantitySamplePredicate: predicate,
+                options: .cumulativeSum
+            ) { _, result, error in
                 if let error = error {
-                    continuation.resume(throwing: error)
+                    print("Exercise minutes fetch error (safe to ignore if no data): \(error.localizedDescription)")
+                    continuation.resume(returning: 0)
                     return
                 }
-                
-                let workouts = samples as? [HKWorkout] ?? []
-                let totalMinutes = workouts.reduce(0.0) { total, workout in
-                    total + workout.duration / 60.0
-                }
-                continuation.resume(returning: totalMinutes)
+                let minutes = result?.sumQuantity()?.doubleValue(for: .minute()) ?? 0
+                continuation.resume(returning: minutes)
             }
             healthStore.execute(query)
         }
     }
-    
+
     private func fetchStandHours(for start: Date, end: Date) async throws -> Double {
-        // Stand hours are typically tracked by Apple Watch
-        // For devices without watch, we'll estimate based on step activity
-        let steps = try await fetchSteps(for: start, end: end)
-        // Estimate: if user has significant steps throughout the day, count as stand hours
-        // This is a simplified approach - real implementation would use HKCategoryTypeIdentifierAppleStandHour
-        let estimatedStandHours = min(12.0, steps / 1000.0) // Rough estimate
-        return estimatedStandHours
+        guard let standHourType = HKObjectType.categoryType(forIdentifier: .appleStandHour) else {
+            return 0
+        }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: standHourType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: nil
+            ) { _, samples, error in
+                if let error = error {
+                    print("Stand hour fetch error (safe to ignore if no data): \(error.localizedDescription)")
+                    continuation.resume(returning: 0)
+                    return
+                }
+                // Count samples with value "stood" (value 0 = stood, value 1 = idle)
+                let stoodCount = (samples as? [HKCategorySample] ?? [])
+                    .filter { $0.value == HKCategoryValueAppleStandHour.stood.rawValue }
+                    .count
+                continuation.resume(returning: Double(stoodCount))
+            }
+            healthStore.execute(query)
+        }
     }
     
     private func fetchSteps(for start: Date, end: Date) async throws -> Double {
@@ -361,8 +411,8 @@ class HealthKitManager: ObservableObject {
             throw HealthKitError.invalidType
         }
         
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
-        
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsQuery(
                 quantityType: stepCountType,
@@ -392,9 +442,9 @@ class HealthKitManager: ObservableObject {
         let predicate = HKQuery.predicateForSamples(
             withStart: startOfDay,
             end: endOfDay,
-            options: [] // Relaxed from .strictStartDate
+            options: .strictStartDate
         )
-        
+
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(
                 sampleType: workoutType,
@@ -466,7 +516,7 @@ class HealthKitManager: ObservableObject {
             let predicate = HKQuery.predicateForSamples(
                 withStart: dayStart,
                 end: dayEnd,
-                options: [] // Relaxed from .strictStartDate
+                options: .strictStartDate
             )
             
             let steps = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Double, Error>) in
@@ -527,8 +577,8 @@ class HealthKitManager: ObservableObject {
             throw HealthKitError.invalidType
         }
         
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
-        
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsQuery(
                 quantityType: flightsType,

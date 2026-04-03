@@ -10,6 +10,7 @@
 	<array>
 		<string>fetch</string>
 		<string>processing</string>
+		<string>healthkit</string>
 	</array>
 </dict>
 </plist>

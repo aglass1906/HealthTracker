@@ -44,17 +44,27 @@ class LeaderboardViewModel: ObservableObject {
             Task { await fetchLeaderboard(for: currentFamilyId) }
         }
     }
-    
+    @Published var selectedDate: Date = Date() {
+        didSet {
+            Task { await fetchLeaderboard(for: currentFamilyId) }
+        }
+    }
+
     private var currentFamilyId: UUID = UUID()
     let client = AuthManager.shared.client
-    
+
+    var isToday: Bool {
+        Calendar.current.isDateInToday(selectedDate)
+    }
+
     func fetchLeaderboard(for familyId: UUID) async {
         isLoading = true
         currentFamilyId = familyId
-        
+
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        let today = formatter.string(from: Date())
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        let today = formatter.string(from: selectedDate)
         
         do {
             // 1. Get all profiles in family to map names
@@ -133,7 +143,8 @@ class LeaderboardViewModel: ObservableObject {
     }
     
     func copyToClipboard() {
-        var text = "🏆 \(selectedMetric.displayName) Leaderboard\nAs of: \(Date().formatted(date: .abbreviated, time: .shortened))\n\n"
+        let dateLabel = isToday ? "Today" : selectedDate.formatted(date: .abbreviated, time: .omitted)
+        var text = "🏆 \(selectedMetric.displayName) Leaderboard\n\(dateLabel)\n\n"
         
         for (index, entry) in entries.enumerated() {
             let rank = index + 1
@@ -164,15 +175,23 @@ struct LeaderboardView: View {
             .padding(.top)
             
             HStack {
-                Text("Today's \(viewModel.selectedMetric.displayName) Leaderboard")
+                DatePicker(
+                    "",
+                    selection: $viewModel.selectedDate,
+                    in: ...Date(),
+                    displayedComponents: .date
+                )
+                .labelsHidden()
+                .datePickerStyle(.compact)
+
+                Text("\(viewModel.selectedMetric.displayName) Leaderboard")
                     .font(.headline)
-                
+
                 Spacer()
-                
+
                 Button {
                     viewModel.copyToClipboard()
                     showCopiedAlert = true
-                    // Auto dismiss after 2s
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                         showCopiedAlert = false
                     }
@@ -200,7 +219,7 @@ struct LeaderboardView: View {
                 ProgressView()
                     .padding()
             } else if viewModel.entries.isEmpty {
-                Text("No data for today yet.")
+                Text(viewModel.isToday ? "No data for today yet." : "No data for \(viewModel.selectedDate.formatted(date: .abbreviated, time: .omitted)).")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .padding()
