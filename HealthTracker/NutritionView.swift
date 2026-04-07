@@ -160,6 +160,27 @@ struct NutritionView: View {
         NavigationStack {
             List {
                 Section {
+                    HStack(alignment: .center, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Apple Health")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text("Save calories & macros when you log a meal")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 8)
+                        Toggle("", isOn: $syncNutritionToHealthKit)
+                            .labelsHidden()
+                            .controlSize(.small)
+                    }
+                    .padding(.vertical, 4)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Sync logged meals to Apple Health")
+                }
+
+                Section {
                     let t = nutritionManager.todayTotals
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Today")
@@ -204,12 +225,6 @@ struct NutritionView: View {
                     } label: {
                         Image(systemName: "plus.circle.fill")
                     }
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Toggle("Health", isOn: $syncNutritionToHealthKit)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                        .accessibilityLabel("Sync nutrition to Apple Health")
                 }
             }
             .sheet(isPresented: $showingLogSheet) {
