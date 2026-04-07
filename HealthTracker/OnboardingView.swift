@@ -175,7 +175,7 @@ struct HealthPermissionStep: View {
                     .font(.largeTitle)
                     .fontWeight(.bold)
                 
-                Text("We need access to your Steps and Activity to track your progress on the family leaderboard.")
+                Text("We read your Steps and Activity for the leaderboard. If you log meals in Nutrition, you can optionally save calories and macros to Apple Health (you control this in the Nutrition tab).")
                     .font(.body)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
@@ -186,6 +186,7 @@ struct HealthPermissionStep: View {
                 FeatureRow(icon: "figure.walk", text: "Track Steps & Distance", color: .green)
                 FeatureRow(icon: "flame.fill", text: "Count Calories Burned", color: .orange)
                 FeatureRow(icon: "crown.fill", text: "Win Daily Challenges", color: .yellow)
+                FeatureRow(icon: "leaf.fill", text: "Log Nutrition to Health (optional)", color: .mint)
             }
             .padding(.horizontal, 32)
             

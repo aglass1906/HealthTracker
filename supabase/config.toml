@@ -1,0 +1,15 @@
+# Local / CLI reference for Edge Functions. project_id matches your Supabase URL host.
+# https://supabase.com/docs/guides/cli/config
+
+project_id = "kbpdgxjzmzgiddlgmihh"
+
+# Gateway JWT verification can return 401 "Invalid JWT" for valid user tokens when the project
+# uses signing that the edge gateway does not accept (e.g. asymmetric keys vs legacy check).
+# These functions enforce auth inside Deno with createClient + auth.getUser() and 401 without a valid user.
+# See: https://supabase.com/docs/guides/troubleshooting/edge-function-401-error-response
+
+[functions.food-lookup]
+verify_jwt = false
+
+[functions.admin-actions]
+verify_jwt = false

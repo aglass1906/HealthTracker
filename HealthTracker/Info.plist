@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>HealthTracker uses the camera to scan food barcodes and take meal photos for nutrition logging.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>HealthTracker needs photo library access so you can choose meal photos for nutrition logging.</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.healthtracker.refresh</string>

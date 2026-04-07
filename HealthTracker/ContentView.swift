@@ -61,12 +61,18 @@ struct ContentView: View {
                                 Label("Community", systemImage: "person.3.fill")
                             }
                             .tag(2)
+
+                        NutritionView()
+                            .tabItem {
+                                Label("Nutrition", systemImage: "leaf.fill")
+                            }
+                            .tag(3)
                         
                         ProfileView()
                             .tabItem {
                                 Label("Profile", systemImage: "person.circle.fill")
                             }
-                            .tag(3)
+                            .tag(4)
                     }
                     .tint(.blue)
                     .task {

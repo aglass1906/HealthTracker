@@ -42,6 +42,25 @@ class HealthKitManager: ObservableObject {
         let activitySummaryType = HKObjectType.activitySummaryType()
         return [stepCount, flightsClimbed, activeEnergy, distance, workoutType, activitySummaryType, exerciseTime, standHour]
     }()
+
+    /// Nutrition logging (write) — energy and macros saved when user confirms a meal (optional in UI).
+    private let shareNutritionTypes: Set<HKSampleType> = {
+        let ids: [HKQuantityTypeIdentifier] = [
+            .dietaryEnergyConsumed,
+            .dietaryProtein,
+            .dietaryCarbohydrates,
+            .dietaryFatTotal,
+            .dietaryFiber,
+            .dietarySodium,
+        ]
+        var set = Set<HKSampleType>()
+        for id in ids {
+            if let t = HKObjectType.quantityType(forIdentifier: id) {
+                set.insert(t)
+            }
+        }
+        return set
+    }()
     
     private init() {
         checkAuthorizationStatus()
@@ -52,7 +71,7 @@ class HealthKitManager: ObservableObject {
             throw HealthKitError.notAvailable
         }
         
-        try await healthStore.requestAuthorization(toShare: [], read: readTypes)
+        try await healthStore.requestAuthorization(toShare: shareNutritionTypes, read: readTypes)
         hasRequestedAuthorization = true
     }
     
@@ -594,6 +613,45 @@ class HealthKitManager: ObservableObject {
                 continuation.resume(returning: flights)
             }
             healthStore.execute(query)
+        }
+    }
+
+    // MARK: - Nutrition (write)
+
+    /// Saves one meal as quantity samples at `date` (same timestamp for each nutrient).
+    func saveNutritionFromMeal(
+        calories: Double,
+        proteinG: Double,
+        carbG: Double,
+        fatG: Double,
+        fiberG: Double?,
+        sodiumMg: Double?,
+        date: Date
+    ) async {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        guard hasRequestedAuthorization else { return }
+
+        func save(_ id: HKQuantityTypeIdentifier, value: Double, unit: HKUnit) async {
+            guard let type = HKObjectType.quantityType(forIdentifier: id) else { return }
+            guard value > 0 else { return }
+            let quantity = HKQuantity(unit: unit, doubleValue: value)
+            let sample = HKQuantitySample(type: type, quantity: quantity, start: date, end: date, metadata: nil)
+            do {
+                try await healthStore.save(sample)
+            } catch {
+                print("HealthKit nutrition save failed (\(id.rawValue)): \(error.localizedDescription)")
+            }
+        }
+
+        await save(.dietaryEnergyConsumed, value: calories, unit: .kilocalorie())
+        await save(.dietaryProtein, value: proteinG, unit: .gram())
+        await save(.dietaryCarbohydrates, value: carbG, unit: .gram())
+        await save(.dietaryFatTotal, value: fatG, unit: .gram())
+        if let f = fiberG, f > 0 {
+            await save(.dietaryFiber, value: f, unit: .gram())
+        }
+        if let na = sodiumMg, na > 0 {
+            await save(.dietarySodium, value: na, unit: .gramUnit(with: .milli))
         }
     }
 }

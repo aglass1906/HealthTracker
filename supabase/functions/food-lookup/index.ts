@@ -1,0 +1,351 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+import { createClient } from "jsr:@supabase/supabase-js@2"
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+}
+
+type FoodCandidate = {
+  name: string
+  brand: string | null
+  serving_amount: number
+  serving_unit: string
+  grams: number | null
+  calories: number
+  protein_g: number
+  carb_g: number
+  fat_g: number
+  fiber_g: number | null
+  sodium_mg: number | null
+  fdc_id: number | null
+  external_product_id: string | null
+}
+
+const NUTRIENT_IDS = {
+  kcal: 1008,
+  protein: 1003,
+  fat: 1004,
+  carb: 1005,
+  fiber: 1079,
+  sodium: 1093,
+} as const
+
+function nutrimentsToCandidate(
+  name: string,
+  brand: string | null,
+  n: Record<string, unknown>,
+  externalId: string | null,
+  fdcId: number | null,
+  servingLabel = "100 g",
+): FoodCandidate {
+  const kcal = num(n["energy-kcal_100g"]) ?? num(n["energy-kcal"]) ?? 0
+  const protein = num(n["proteins_100g"]) ?? num(n["proteins"]) ?? 0
+  const carb = num(n["carbohydrates_100g"]) ?? num(n["carbohydrates"]) ?? 0
+  const fat = num(n["fat_100g"]) ?? num(n["fat"]) ?? 0
+  const fiber = num(n["fiber_100g"]) ?? num(n["fiber"]) ?? null
+  const sodiumG = num(n["sodium_100g"]) ?? num(n["sodium"]) ?? null
+  const sodiumMg = sodiumG != null ? sodiumG * 1000 : null
+  return {
+    name,
+    brand,
+    serving_amount: 100,
+    serving_unit: servingLabel,
+    grams: 100,
+    calories: kcal,
+    protein_g: protein,
+    carb_g: carb,
+    fat_g: fat,
+    fiber_g: fiber,
+    sodium_mg: sodiumMg,
+    fdc_id: fdcId,
+    external_product_id: externalId,
+  }
+}
+
+function num(v: unknown): number | null {
+  if (v == null || v === "") return null
+  const x = typeof v === "number" ? v : parseFloat(String(v))
+  return Number.isFinite(x) ? x : null
+}
+
+async function openFoodFactsBarcode(code: string): Promise<FoodCandidate[]> {
+  const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`
+  const res = await fetch(url)
+  if (!res.ok) return []
+  const data = await res.json()
+  if (data.status !== 1 || !data.product) return []
+  const p = data.product
+  const name = (p.product_name || p.generic_name || "Unknown product") as string
+  const brand = (p.brands as string | undefined)?.split(",")[0]?.trim() ?? null
+  const n = (p.nutriments || {}) as Record<string, unknown>
+  const c = nutrimentsToCandidate(name, brand, n, String(code), null, "per 100 g")
+  return [c]
+}
+
+async function openFoodFactsSearch(q: string): Promise<FoodCandidate[]> {
+  const url =
+    `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${
+      encodeURIComponent(q)
+    }&search_simple=1&action=process&json=1&page_size=5`
+  const res = await fetch(url)
+  if (!res.ok) return []
+  const data = await res.json()
+  const products = data.products as Array<Record<string, unknown>> | undefined
+  if (!products?.length) return []
+  const out: FoodCandidate[] = []
+  for (const p of products) {
+    const code = p.code != null ? String(p.code) : null
+    const name = String(p.product_name || p.generic_name || "Food")
+    const brand = p.brands ? String(p.brands).split(",")[0].trim() : null
+    const n = (p.nutriments as Record<string, unknown>) || {}
+    out.push(nutrimentsToCandidate(name, brand, n, code, null, "per 100 g"))
+  }
+  return out
+}
+
+function mapUsdaNutrients(nutrients: Array<{ nutrientId?: number; value?: number }>): {
+  kcal: number
+  protein: number
+  carb: number
+  fat: number
+  fiber: number | null
+  sodiumMg: number | null
+} {
+  let kcal = 0,
+    protein = 0,
+    carb = 0,
+    fat = 0,
+    fiber: number | null = null,
+    sodiumMg: number | null = null
+  for (const n of nutrients || []) {
+    const id = n.nutrientId
+    const v = n.value
+    if (v == null || !Number.isFinite(v)) continue
+    if (id === NUTRIENT_IDS.kcal) kcal = v
+    else if (id === NUTRIENT_IDS.protein) protein = v
+    else if (id === NUTRIENT_IDS.carb) carb = v
+    else if (id === NUTRIENT_IDS.fat) fat = v
+    else if (id === NUTRIENT_IDS.fiber) fiber = v
+    else if (id === NUTRIENT_IDS.sodium) sodiumMg = v
+  }
+  return { kcal, protein, carb, fat, fiber, sodiumMg }
+}
+
+async function usdaSearchToCandidates(query: string, apiKey: string): Promise<FoodCandidate[]> {
+  const url = new URL("https://api.nal.usda.gov/fdc/v1/foods/search")
+  url.searchParams.set("api_key", apiKey)
+  url.searchParams.set("query", query)
+  url.searchParams.set("pageSize", "5")
+  const res = await fetch(url.toString())
+  if (!res.ok) return []
+  const data = await res.json()
+  const foods = data.foods as Array<{
+    fdcId: number
+    description: string
+    brandName?: string
+    foodNutrients?: Array<{ nutrientId?: number; value?: number }>
+  }> | undefined
+  if (!foods?.length) return []
+  const out: FoodCandidate[] = []
+  for (const f of foods) {
+    const mapped = mapUsdaNutrients(f.foodNutrients || [])
+    out.push({
+      name: f.description,
+      brand: f.brandName ?? null,
+      serving_amount: 100,
+      serving_unit: "per 100 g",
+      grams: 100,
+      calories: mapped.kcal,
+      protein_g: mapped.protein,
+      carb_g: mapped.carb,
+      fat_g: mapped.fat,
+      fiber_g: mapped.fiber,
+      sodium_mg: mapped.sodiumMg,
+      fdc_id: f.fdcId,
+      external_product_id: null,
+    })
+  }
+  return out
+}
+
+async function openaiDescribeFoods(
+  imageBase64: string,
+  mimeType: string,
+  apiKey: string,
+): Promise<string[]> {
+  const body = {
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text:
+              "List the distinct food items visible in this meal as a JSON array of strings only, no other text, max 6 items, use common English food names (e.g. [\"grilled chicken breast\",\"white rice\"]).",
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:${mimeType};base64,${imageBase64}`,
+            },
+          },
+        ],
+      },
+    ],
+    max_tokens: 300,
+  }
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    console.error("OpenAI error:", t)
+    return []
+  }
+  const data = await res.json()
+  const text = data.choices?.[0]?.message?.content as string | undefined
+  if (!text) return []
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "")
+  try {
+    const arr = JSON.parse(trimmed)
+    if (Array.isArray(arr)) return arr.map((x) => String(x)).filter(Boolean)
+  } catch {
+    /* fall through */
+  }
+  return trimmed.split(",").map((s) => s.replace(/^\[|\]|"/g, "").trim()).filter(Boolean)
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders })
+  }
+
+  try {
+    const authHeader = req.headers.get("Authorization")
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } },
+    )
+
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized", details: userError?.message }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
+    }
+
+    const json = await req.json().catch(() => ({})) as {
+      mode?: string
+      barcode?: string
+      image_base64?: string
+      mime_type?: string
+      query?: string
+    }
+
+    const mode = json.mode
+    const usdaKey = Deno.env.get("USDA_API_KEY") ?? ""
+    const openaiKey = Deno.env.get("OPENAI_API_KEY") ?? ""
+
+    let candidates: FoodCandidate[] = []
+    let notice: string | undefined
+
+    if (mode === "barcode") {
+      const raw = json.barcode?.replace(/\D/g, "") ?? ""
+      if (raw.length < 8) {
+        return new Response(JSON.stringify({ error: "Invalid barcode" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        })
+      }
+      candidates = await openFoodFactsBarcode(raw)
+      if (!candidates.length) {
+        notice = "No product found in Open Food Facts for this barcode."
+      }
+    } else if (mode === "search") {
+      const q = (json.query || "").trim()
+      if (q.length < 2) {
+        return new Response(JSON.stringify({ error: "Query too short" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        })
+      }
+      if (usdaKey) {
+        candidates = await usdaSearchToCandidates(q, usdaKey)
+      }
+      if (!candidates.length) {
+        candidates = await openFoodFactsSearch(q)
+      }
+      if (!candidates.length) notice = "No foods matched your search."
+    } else if (mode === "photo") {
+      const b64 = json.image_base64
+      const mime = json.mime_type || "image/jpeg"
+      if (!b64) {
+        return new Response(JSON.stringify({ error: "Missing image_base64" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        })
+      }
+      if (!openaiKey) {
+        return new Response(
+          JSON.stringify({
+            candidates: [],
+            notice:
+              "Photo recognition requires OPENAI_API_KEY on the food-lookup function. Use Search or Barcode, or add the secret in Supabase.",
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        )
+      }
+      const items = await openaiDescribeFoods(b64, mime, openaiKey)
+      if (!items.length) {
+        notice = "Could not identify foods in the image. Try manual search."
+      }
+      const seen = new Set<string>()
+      for (const term of items) {
+        const key = term.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        let batch: FoodCandidate[] = []
+        if (usdaKey) {
+          batch = await usdaSearchToCandidates(term, usdaKey)
+        }
+        if (!batch.length) {
+          batch = await openFoodFactsSearch(term)
+        }
+        candidates.push(...batch.slice(0, 2))
+      }
+      candidates = candidates.slice(0, 12)
+    } else {
+      return new Response(JSON.stringify({ error: "Invalid mode; use barcode | photo | search" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
+    }
+
+    return new Response(JSON.stringify({ candidates, notice }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error"
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    })
+  }
+})

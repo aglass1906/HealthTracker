@@ -36,14 +36,10 @@ class AdminManager: ObservableObject {
         isLoading = true
         errorMessage = nil
         
-        guard let session = AuthManager.shared.session else {
-            isLoading = false
-            errorMessage = "No active session"
-            return []
-        }
-        
+        let client = AuthManager.shared.client
         do {
-            let response: AdminUserListResponse = try await AuthManager.shared.client.functions
+            let session = try await client.auth.session
+            let response: AdminUserListResponse = try await client.functions
                 .invoke(
                     functionName,
                     options: FunctionInvokeOptions(
@@ -65,6 +61,10 @@ class AdminManager: ObservableObject {
                  print("Admin fetch error (FunctionsError): \(error)")
             }
             return []
+        } catch let error as AuthError where error == .sessionMissing {
+            isLoading = false
+            errorMessage = "No active session"
+            return []
         } catch {
             isLoading = false
             errorMessage = "Failed to fetch users: \(error.localizedDescription)"
@@ -83,14 +83,10 @@ class AdminManager: ObservableObject {
         isLoading = true
         errorMessage = nil
         
-        guard let session = AuthManager.shared.session else {
-            isLoading = false
-            errorMessage = "No active session"
-            return false
-        }
-        
+        let client = AuthManager.shared.client
         do {
-            let _: actionResponse = try await AuthManager.shared.client.functions
+            let session = try await client.auth.session
+            let _: actionResponse = try await client.functions
                 .invoke(
                     functionName,
                     options: FunctionInvokeOptions(
@@ -115,6 +111,10 @@ class AdminManager: ObservableObject {
             } else {
                  print("Admin update error (FunctionsError): \(error)")
             }
+            return false
+        } catch let error as AuthError where error == .sessionMissing {
+            isLoading = false
+            errorMessage = "No active session"
             return false
         } catch {
             isLoading = false
