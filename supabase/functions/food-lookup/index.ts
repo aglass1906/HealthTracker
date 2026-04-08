@@ -69,6 +69,23 @@ function num(v: unknown): number | null {
   return Number.isFinite(x) ? x : null
 }
 
+/** GS1 check digit for GTIN-8 / 12 / 13 / 14 only; other lengths pass through (e.g. Code 128). */
+function hasValidGtinCheckDigit(raw: string): boolean {
+  const len = raw.length
+  if (![8, 12, 13, 14].includes(len)) return true
+  const body = raw.slice(0, -1)
+  const check = parseInt(raw.slice(-1), 10)
+  if (Number.isNaN(check)) return false
+  const data = body.split("").reverse().map((c) => parseInt(c, 10))
+  if (data.some((d) => Number.isNaN(d))) return false
+  let sum = 0
+  for (let i = 0; i < data.length; i++) {
+    sum += data[i]! * (i % 2 === 0 ? 3 : 1)
+  }
+  const expected = (10 - (sum % 10)) % 10
+  return expected === check
+}
+
 async function openFoodFactsBarcode(code: string): Promise<FoodCandidate[]> {
   const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`
   const res = await fetch(url)
@@ -273,6 +290,15 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         })
       }
+      if (!hasValidGtinCheckDigit(raw)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid barcode (check digit). Try scanning again." }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        )
+      }
       candidates = await openFoodFactsBarcode(raw)
       if (!candidates.length) {
         notice = "No product found in Open Food Facts for this barcode."
@@ -300,6 +326,17 @@ Deno.serve(async (req) => {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         })
+      }
+      if (b64.length > 10_000_000) {
+        return new Response(
+          JSON.stringify({
+            error: "Image too large. Use a smaller photo or lower resolution.",
+          }),
+          {
+            status: 413,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        )
       }
       if (!openaiKey) {
         return new Response(

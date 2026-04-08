@@ -11,6 +11,9 @@ import UIKit
 // MARK: - Image resize
 
 extension UIImage {
+    /// Max JPEG size before base64 upload (keep under typical Edge/gateway limits).
+    static let ht_maxFoodLookupJPEGBytes = 2_400_000
+
     func ht_resized(maxDimension: CGFloat) -> UIImage {
         let w = size.width
         let h = size.height
@@ -22,6 +25,24 @@ extension UIImage {
         return renderer.image { _ in
             draw(in: CGRect(origin: .zero, size: CGSize(width: nw, height: nh)))
         }
+    }
+
+    /// Resizes and recompresses until JPEG is under `maxBytes` (for `food-lookup` JSON body).
+    func ht_jpegForFoodLookup(maxBytes: Int = UIImage.ht_maxFoodLookupJPEGBytes) -> Data? {
+        var dim: CGFloat = 960
+        var image = ht_resized(maxDimension: dim)
+        var quality: CGFloat = 0.72
+        for _ in 0 ..< 12 {
+            guard let data = image.jpegData(compressionQuality: quality) else { return nil }
+            if data.count <= maxBytes { return data }
+            quality -= 0.08
+            if quality < 0.28 {
+                quality = 0.65
+                dim *= 0.88
+                image = ht_resized(maxDimension: max(dim, 320))
+            }
+        }
+        return image.jpegData(compressionQuality: 0.22)
     }
 }
 
@@ -71,6 +92,9 @@ final class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOut
     weak var delegate: BarcodeScannerDelegate?
     private var session: AVCaptureSession?
     private let previewLayer = AVCaptureVideoPreviewLayer()
+    private var videoDevice: AVCaptureDevice?
+    private var didEmitCode = false
+    private let torchButton = UIButton(type: .system)
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -107,10 +131,31 @@ final class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOut
             cancel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
             cancel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
         ])
+
+        torchButton.setTitle("Light", for: .normal)
+        torchButton.tintColor = .white
+        torchButton.translatesAutoresizingMaskIntoConstraints = false
+        torchButton.addTarget(self, action: #selector(torchTapped), for: .touchUpInside)
+        torchButton.isHidden = true
+        view.addSubview(torchButton)
+        NSLayoutConstraint.activate([
+            torchButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            torchButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+        ])
     }
 
     @objc private func cancelTapped() {
         delegate?.didCancel()
+    }
+
+    @objc private func torchTapped() {
+        guard let d = videoDevice, d.hasTorch else { return }
+        do {
+            try d.lockForConfiguration()
+            d.torchMode = d.torchMode == .on ? .off : .on
+            d.unlockForConfiguration()
+            torchButton.setTitle(d.torchMode == .on ? "Light on" : "Light", for: .normal)
+        } catch {}
     }
 
     private func startSession() {
@@ -120,6 +165,8 @@ final class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOut
               let input = try? AVCaptureDeviceInput(device: device),
               session.canAddInput(input) else { return }
         session.addInput(input)
+        videoDevice = device
+        torchButton.isHidden = !device.hasTorch
 
         let output = AVCaptureMetadataOutput()
         guard session.canAddOutput(output) else { return }
@@ -141,9 +188,16 @@ final class BarcodeScannerViewController: UIViewController, AVCaptureMetadataOut
         didOutput metadataObjects: [AVMetadataObject],
         from connection: AVCaptureConnection
     ) {
-        guard let obj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+        guard !didEmitCode,
+              let obj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
               let s = obj.stringValue else { return }
+        didEmitCode = true
         session?.stopRunning()
+        if let d = videoDevice, d.hasTorch, d.isTorchActive {
+            try? d.lockForConfiguration()
+            d.torchMode = .off
+            d.unlockForConfiguration()
+        }
         delegate?.didScan(code: s)
     }
 }
@@ -341,9 +395,12 @@ struct LogFoodSheet: View {
     @State private var photoJPEG: Data?
     @State private var pickedItem: PhotosPickerItem?
     @State private var showingCamera = false
+    @State private var showingCameraUnavailableAlert = false
     @State private var pendingSource = "manual"
     @State private var pendingBarcode: String?
     @State private var mealCategory: MealCategory = .lunch
+    /// When true, `notice` text is shown in red (API/transport failure). When false, empty results use orange.
+    @State private var lookupNoticeIsError = false
 
     var body: some View {
         NavigationStack {
@@ -378,6 +435,11 @@ struct LogFoodSheet: View {
             }
             .navigationTitle("Log food")
             .navigationBarTitleDisplayMode(.inline)
+            .alert("Camera not available", isPresented: $showingCameraUnavailableAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("The Simulator has no camera. Use “Choose photo” or run the app on a physical iPhone.")
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }
@@ -429,12 +491,11 @@ struct LogFoodSheet: View {
                     .disabled(searchText.trimmingCharacters(in: .whitespacesAndNewlines).count < 2 || isLookingUp)
             }
             .padding(.horizontal)
-            if let notice {
-                Text(notice)
+            if isLookingUp {
+                ProgressView("Searching…")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal)
             }
+            lookupNoticeView
             candidateList
         }
     }
@@ -452,12 +513,11 @@ struct LogFoodSheet: View {
                     .cornerRadius(12)
             }
             .padding(.horizontal)
-            if let notice {
-                Text(notice)
+            if isLookingUp {
+                ProgressView("Looking up barcode…")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal)
             }
+            lookupNoticeView
             candidateList
         }
     }
@@ -475,15 +535,18 @@ struct LogFoodSheet: View {
             .onChange(of: pickedItem) { _, new in
                 Task {
                     guard let new else { return }
-                    if let data = try? await new.loadTransferable(type: Data.self) {
-                        if let ui = UIImage(data: data) {
-                            photoJPEG = ui.ht_resized(maxDimension: 800).jpegData(compressionQuality: 0.7)
-                        }
+                    if let data = try? await new.loadTransferable(type: Data.self),
+                       let ui = UIImage(data: data) {
+                        photoJPEG = ui.ht_jpegForFoodLookup()
                     }
                 }
             }
             Button {
-                showingCamera = true
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    showingCamera = true
+                } else {
+                    showingCameraUnavailableAlert = true
+                }
             } label: {
                 Label("Take photo", systemImage: "camera.fill")
                     .frame(maxWidth: .infinity)
@@ -492,6 +555,41 @@ struct LogFoodSheet: View {
                     .cornerRadius(12)
             }
             .padding(.horizontal)
+
+            if let jpeg = photoJPEG, let previewImage = UIImage(data: jpeg) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Meal photo")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                    Image(uiImage: previewImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity)
+                        .frame(maxHeight: 240)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .strokeBorder(Color.secondary.opacity(0.25), lineWidth: 1)
+                        )
+                    HStack {
+                        Text(
+                            "~\(String(format: "%.1f", Double(jpeg.count) / 1_048_576)) MB · ready to analyze"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Change photo") {
+                            photoJPEG = nil
+                            pickedItem = nil
+                        }
+                        .font(.caption)
+                        .fontWeight(.medium)
+                    }
+                }
+                .padding(.horizontal)
+            }
+
             Button {
                 Task { await runPhoto() }
             } label: {
@@ -506,13 +604,23 @@ struct LogFoodSheet: View {
             }
             .padding(.horizontal)
             .disabled(photoJPEG == nil || isLookingUp)
-            if let notice {
-                Text(notice)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal)
-            }
+            lookupNoticeView
             candidateList
+        }
+    }
+
+    @ViewBuilder
+    private var lookupNoticeView: some View {
+        if let notice, !notice.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Text(notice)
+                .font(.caption)
+                .foregroundStyle(
+                    lookupNoticeIsError
+                        ? Color.red
+                        : (candidates.isEmpty ? Color.orange : Color.secondary)
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
         }
     }
 
@@ -546,12 +654,15 @@ struct LogFoodSheet: View {
         guard q.count >= 2 else { return }
         isLookingUp = true
         notice = nil
+        lookupNoticeIsError = false
         defer { isLookingUp = false }
         guard let res = await nutritionManager.lookupSearch(q) else {
-            notice = nutritionManager.errorMessage
+            lookupNoticeIsError = true
+            notice = nutritionManager.errorMessage ?? "Search failed."
             candidates = []
             return
         }
+        lookupNoticeIsError = false
         candidates = res.candidates
         notice = res.notice
         pendingSource = "manual"
@@ -561,12 +672,15 @@ struct LogFoodSheet: View {
     private func runBarcode(_ code: String) async {
         isLookingUp = true
         notice = nil
+        lookupNoticeIsError = false
         defer { isLookingUp = false }
         guard let res = await nutritionManager.lookupBarcode(code) else {
-            notice = nutritionManager.errorMessage
+            lookupNoticeIsError = true
+            notice = nutritionManager.errorMessage ?? "Barcode lookup failed."
             candidates = []
             return
         }
+        lookupNoticeIsError = false
         candidates = res.candidates
         notice = res.notice
         pendingSource = "barcode"
@@ -577,12 +691,15 @@ struct LogFoodSheet: View {
         guard let jpeg = photoJPEG else { return }
         isLookingUp = true
         notice = nil
+        lookupNoticeIsError = false
         defer { isLookingUp = false }
         guard let res = await nutritionManager.lookupPhoto(imageJPEG: jpeg) else {
-            notice = nutritionManager.errorMessage
+            lookupNoticeIsError = true
+            notice = nutritionManager.errorMessage ?? "Photo analysis failed."
             candidates = []
             return
         }
+        lookupNoticeIsError = false
         candidates = res.candidates
         notice = res.notice
         pendingSource = "photo"
@@ -830,7 +947,12 @@ struct ImagePickerRepresentable: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let p = UIImagePickerController()
-        p.sourceType = .camera
+        // Simulator (and some Mac Catalyst setups) have no camera; `.camera` throws "Source type 1 not available".
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            p.sourceType = .camera
+        } else if UIImagePickerController.isSourceTypeAvailable(.photoLibrary) {
+            p.sourceType = .photoLibrary
+        }
         p.delegate = context.coordinator
         return p
     }
@@ -854,7 +976,7 @@ struct ImagePickerRepresentable: UIViewControllerRepresentable {
             didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
         ) {
             if let img = info[.originalImage] as? UIImage {
-                parent.imageData = img.ht_resized(maxDimension: 800).jpegData(compressionQuality: 0.7)
+                parent.imageData = img.ht_jpegForFoodLookup()
             }
             parent.dismiss()
         }

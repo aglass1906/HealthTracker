@@ -62,8 +62,15 @@ final class NutritionManager: ObservableObject {
         await invokeLookup(FoodLookupRequest(mode: "search", barcode: nil, imageBase64: nil, mimeType: nil, query: query))
     }
 
+    /// Avoid huge JSON bodies (~6.5M+ base64 chars can hit gateway limits); client compresses with `UIImage.ht_jpegForFoodLookup()`.
+    private let maxPhotoBase64Length = 9_000_000
+
     func lookupPhoto(imageJPEG: Data) async -> FoodLookupResponse? {
         let b64 = imageJPEG.base64EncodedString()
+        if b64.count > maxPhotoBase64Length {
+            errorMessage = "Photo is still too large to upload. Try taking a new photo or choose a smaller image."
+            return nil
+        }
         return await invokeLookup(
             FoodLookupRequest(mode: "photo", barcode: nil, imageBase64: b64, mimeType: "image/jpeg", query: nil)
         )
