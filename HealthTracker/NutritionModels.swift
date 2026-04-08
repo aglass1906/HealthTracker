@@ -24,6 +24,7 @@ struct NutritionLogRow: Codable, Identifiable, Hashable {
     var photo_path: String?
     var status: String
     let created_at: Date
+    var notes: String?
     var nutrition_log_items: [NutritionLogItemRow]?
 }
 
@@ -35,6 +36,8 @@ struct NutritionLogItemRow: Codable, Identifiable, Hashable {
     var serving_amount: Double
     var serving_unit: String
     var grams: Double?
+    /// Nil if row predates V1.1 migration; treat as 1.
+    var quantity: Double?
     var calories: Double
     var protein_g: Double
     var carb_g: Double
@@ -43,6 +46,24 @@ struct NutritionLogItemRow: Codable, Identifiable, Hashable {
     var sodium_mg: Double?
     var fdc_id: Int64?
     var external_product_id: String?
+    var nutrients: [String: Double]?
+
+    /// Sugar from `nutrients` JSON (e.g. food-lookup `sugars_g`). Zero when not provided.
+    var sugarGramsFromNutrients: Double {
+        Self.sugarGrams(from: nutrients)
+    }
+
+    static func sugarGrams(from nutrients: [String: Double]?) -> Double {
+        guard let nutrients, !nutrients.isEmpty else { return 0 }
+        let directKeys = ["sugars_g", "Sugar", "Total Sugars", "sugars"]
+        for k in directKeys {
+            if let v = nutrients[k] { return max(0, v) }
+        }
+        for (k, v) in nutrients where k.localizedCaseInsensitiveContains("sugar") {
+            return max(0, v)
+        }
+        return 0
+    }
 }
 
 struct FoodCandidateDTO: Codable, Identifiable {
@@ -62,11 +83,16 @@ struct FoodCandidateDTO: Codable, Identifiable {
     let sodium_mg: Double?
     let fdc_id: Int64?
     let external_product_id: String?
+    var household_serving_text: String?
+    var nutrients_extra: [String: Double]?
 
     func scaled(gramsEaten: Double) -> FoodCandidateDTO {
         let base = grams ?? 100
         guard base > 0 else { return self }
         let factor = gramsEaten / base
+        let scaledExtra = nutrients_extra.map { dict in
+            dict.mapValues { $0 * factor }
+        }
         return FoodCandidateDTO(
             name: name,
             brand: brand,
@@ -80,8 +106,41 @@ struct FoodCandidateDTO: Codable, Identifiable {
             fiber_g: fiber_g.map { $0 * factor },
             sodium_mg: sodium_mg.map { $0 * factor },
             fdc_id: fdc_id,
-            external_product_id: external_product_id
+            external_product_id: external_product_id,
+            household_serving_text: household_serving_text,
+            nutrients_extra: scaledExtra
         )
+    }
+}
+
+extension FoodCandidateDTO {
+    /// Favorite / confirm baseline from a saved line (per–quantity-1 macros and grams so scaling matches lookup flow).
+    init(fromLoggedItem item: NutritionLogItemRow) {
+        let qty = max(item.quantity ?? 1, 0.01)
+        let totalG = max(item.grams ?? item.serving_amount, 1)
+        let gPer = totalG / qty
+        let nutrientsScaled = item.nutrients.map { dict in
+            dict.mapValues { $0 / qty }
+        }
+        name = item.name
+        brand = item.brand
+        serving_amount = item.serving_amount
+        serving_unit = item.serving_unit
+        grams = gPer
+        calories = item.calories / qty
+        protein_g = item.protein_g / qty
+        carb_g = item.carb_g / qty
+        fat_g = item.fat_g / qty
+        fiber_g = item.fiber_g.map { $0 / qty }
+        sodium_mg = item.sodium_mg.map { $0 / qty }
+        fdc_id = item.fdc_id
+        external_product_id = item.external_product_id
+        household_serving_text = nil
+        nutrients_extra = nutrientsScaled
+    }
+
+    var sugarGramsFromNutrients: Double {
+        NutritionLogItemRow.sugarGrams(from: nutrients_extra)
     }
 }
 
@@ -113,5 +172,47 @@ struct FoodLookupRequest: Encodable {
         case mode, barcode, query
         case imageBase64 = "image_base64"
         case mimeType = "mime_type"
+    }
+}
+
+// MARK: - Local favorites (UserDefaults)
+
+enum NutritionFavoritesStore {
+    private static let key = "nutrition_favorite_candidates_v1"
+    private static let maxCount = 40
+
+    static func load() -> [FoodCandidateDTO] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let decoded = try? JSONDecoder().decode([FoodCandidateDTO].self, from: data)
+        else { return [] }
+        return decoded
+    }
+
+    static func contains(id: String) -> Bool {
+        load().contains { $0.id == id }
+    }
+
+    static func add(_ candidate: FoodCandidateDTO) {
+        var list = load().filter { $0.id != candidate.id }
+        list.insert(candidate, at: 0)
+        if list.count > maxCount { list = Array(list.prefix(maxCount)) }
+        if let data = try? JSONEncoder().encode(list) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
+
+    static func remove(id: String) {
+        let list = load().filter { $0.id != id }
+        if let data = try? JSONEncoder().encode(list) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
+
+    static func toggle(_ candidate: FoodCandidateDTO) {
+        if contains(id: candidate.id) {
+            remove(id: candidate.id)
+        } else {
+            add(candidate)
+        }
     }
 }

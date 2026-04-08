@@ -20,6 +20,8 @@ type FoodCandidate = {
   sodium_mg: number | null
   fdc_id: number | null
   external_product_id: string | null
+  household_serving_text?: string | null
+  nutrients_extra?: Record<string, number> | null
 }
 
 const NUTRIENT_IDS = {
@@ -29,28 +31,157 @@ const NUTRIENT_IDS = {
   carb: 1005,
   fiber: 1079,
   sodium: 1093,
+  /** FDC nutrient.id for "Total Sugars" (branded + SR Legacy search/detail). */
+  sugarsTotal: 2000,
+  /** Legacy / rare payloads that use NLEA code 269 as id. */
+  sugarsLegacy: 269,
+  satFat: 1258,
+  cholesterol: 1253,
+  potassium: 1092,
 } as const
 
-function nutrimentsToCandidate(
-  name: string,
-  brand: string | null,
+function num(v: unknown): number | null {
+  if (v == null || v === "") return null
+  const x = typeof v === "number" ? v : parseFloat(String(v))
+  return Number.isFinite(x) ? x : null
+}
+
+/** Parse grams (or treat ml as g) from OFF serving_size like "41 g", "30g", "250 ml". */
+function parseServingGramsFromString(servingSize: string): number | null {
+  const t = servingSize.trim().toLowerCase()
+  const m = t.match(/([\d.,]+)\s*(g|gram|grams|ml|milliliters?)\b/)
+  if (!m) return null
+  const v = parseFloat(m[1]!.replace(",", "."))
+  if (!Number.isFinite(v) || v <= 0) return null
+  return v
+}
+
+function offHouseholdText(product: Record<string, unknown>): string | null {
+  const ss = product.serving_size
+  if (typeof ss === "string" && ss.trim()) return ss.trim()
+  const q = product.quantity
+  const u = product.quantity_unit
+  if (q != null && u) return `${q} ${u}`.trim()
+  return null
+}
+
+/** Collect reference nutrients from OFF nutriments (same basis as main macros). */
+function offNutrientsExtra(
   n: Record<string, unknown>,
+  useServing: boolean,
+): Record<string, number> | null {
+  const suf = useServing ? "_serving" : "_100g"
+  const pick = (base: string): number | null => {
+    const a = num(n[`${base}${suf}`])
+    if (a != null) return a
+    if (!useServing) return num(n[base])
+    return num(n[`${base}_serving`]) ?? num(n[base])
+  }
+  const out: Record<string, number> = {}
+  const map: [string, string][] = [
+    ["sugars_g", "sugars"],
+    ["saturated_fat_g", "saturated-fat"],
+    ["cholesterol_mg", "cholesterol"],
+    ["potassium_mg", "potassium"],
+  ]
+  for (const [key, offBase] of map) {
+    const v = pick(offBase)
+    if (v != null && v > 0) out[key] = v
+  }
+  if (out["sugars_g"] == null) {
+    const added = pick("added-sugars")
+    if (added != null && added > 0) out["sugars_g"] = added
+  }
+  // Sodium in OFF often per 100g as salt or sodium — main flow uses sodium_100g; duplicate for extras as mg
+  const na = useServing ? (num(n["sodium_serving"]) ?? num(n["sodium"])) : (num(n["sodium_100g"]) ?? num(n["sodium"]))
+  if (na != null && na > 0) {
+    const mg = na < 50 ? na * 1000 : na
+    if (mg > 0) out["sodium_mg_extra"] = mg
+  }
+  return Object.keys(out).length ? out : null
+}
+
+function offProductToCandidate(
+  p: Record<string, unknown>,
   externalId: string | null,
   fdcId: number | null,
-  servingLabel = "100 g",
 ): FoodCandidate {
+  const name = String(p.product_name || p.generic_name || "Food")
+  const brand = p.brands ? String(p.brands).split(",")[0].trim() : null
+  const n = (p.nutriments || {}) as Record<string, unknown>
+  const ndp = String(p.nutrition_data_per ?? "100g").toLowerCase()
+  const household = offHouseholdText(p)
+  const servingGrams = household ? parseServingGramsFromString(household) : null
+
+  const preferServing =
+    ndp.includes("serving") ||
+    (num(n["energy-kcal_serving"]) != null && num(n["energy-kcal_serving"])! > 0)
+
+  if (preferServing && servingGrams != null && servingGrams > 0) {
+    const kcal = num(n["energy-kcal_serving"]) ?? num(n["energy-kcal"]) ?? 0
+    const protein = num(n["proteins_serving"]) ?? num(n["proteins"]) ?? 0
+    const carb = num(n["carbohydrates_serving"]) ?? num(n["carbohydrates"]) ?? 0
+    const fat = num(n["fat_serving"]) ?? num(n["fat"]) ?? 0
+    const fiber = num(n["fiber_serving"]) ?? num(n["fiber"]) ?? null
+    const sodiumG = num(n["sodium_serving"]) ?? num(n["sodium"]) ?? null
+    const sodiumMg = sodiumG != null ? (sodiumG < 50 ? sodiumG * 1000 : sodiumG) : null
+    return {
+      name,
+      brand,
+      serving_amount: 1,
+      serving_unit: household ?? "serving",
+      grams: servingGrams,
+      calories: kcal,
+      protein_g: protein,
+      carb_g: carb,
+      fat_g: fat,
+      fiber_g: fiber,
+      sodium_mg: sodiumMg,
+      fdc_id: fdcId,
+      external_product_id: externalId,
+      household_serving_text: household,
+      nutrients_extra: offNutrientsExtra(n, true),
+    }
+  }
+
   const kcal = num(n["energy-kcal_100g"]) ?? num(n["energy-kcal"]) ?? 0
   const protein = num(n["proteins_100g"]) ?? num(n["proteins"]) ?? 0
   const carb = num(n["carbohydrates_100g"]) ?? num(n["carbohydrates"]) ?? 0
   const fat = num(n["fat_100g"]) ?? num(n["fat"]) ?? 0
   const fiber = num(n["fiber_100g"]) ?? num(n["fiber"]) ?? null
   const sodiumG = num(n["sodium_100g"]) ?? num(n["sodium"]) ?? null
-  const sodiumMg = sodiumG != null ? sodiumG * 1000 : null
+  const sodiumMg = sodiumG != null ? (sodiumG < 50 ? sodiumG * 1000 : sodiumG) : null
+
+  if (servingGrams != null && servingGrams > 0 && servingGrams !== 100) {
+    const f = servingGrams / 100
+    const extra = offNutrientsExtra(n, false)
+    const scaledExtra = extra
+      ? Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, v * f]))
+      : null
+    return {
+      name,
+      brand,
+      serving_amount: 1,
+      serving_unit: household ?? `${servingGrams} g`,
+      grams: servingGrams,
+      calories: kcal * f,
+      protein_g: protein * f,
+      carb_g: carb * f,
+      fat_g: fat * f,
+      fiber_g: fiber != null ? fiber * f : null,
+      sodium_mg: sodiumMg != null ? sodiumMg * f : null,
+      fdc_id: fdcId,
+      external_product_id: externalId,
+      household_serving_text: household,
+      nutrients_extra: scaledExtra,
+    }
+  }
+
   return {
     name,
     brand,
     serving_amount: 100,
-    serving_unit: servingLabel,
+    serving_unit: "per 100 g",
     grams: 100,
     calories: kcal,
     protein_g: protein,
@@ -60,13 +191,9 @@ function nutrimentsToCandidate(
     sodium_mg: sodiumMg,
     fdc_id: fdcId,
     external_product_id: externalId,
+    household_serving_text: household,
+    nutrients_extra: offNutrientsExtra(n, false),
   }
-}
-
-function num(v: unknown): number | null {
-  if (v == null || v === "") return null
-  const x = typeof v === "number" ? v : parseFloat(String(v))
-  return Number.isFinite(x) ? x : null
 }
 
 /** GS1 check digit for GTIN-8 / 12 / 13 / 14 only; other lengths pass through (e.g. Code 128). */
@@ -92,12 +219,8 @@ async function openFoodFactsBarcode(code: string): Promise<FoodCandidate[]> {
   if (!res.ok) return []
   const data = await res.json()
   if (data.status !== 1 || !data.product) return []
-  const p = data.product
-  const name = (p.product_name || p.generic_name || "Unknown product") as string
-  const brand = (p.brands as string | undefined)?.split(",")[0]?.trim() ?? null
-  const n = (p.nutriments || {}) as Record<string, unknown>
-  const c = nutrimentsToCandidate(name, brand, n, String(code), null, "per 100 g")
-  return [c]
+  const p = data.product as Record<string, unknown>
+  return [offProductToCandidate(p, String(code), null)]
 }
 
 async function openFoodFactsSearch(q: string): Promise<FoodCandidate[]> {
@@ -110,15 +233,10 @@ async function openFoodFactsSearch(q: string): Promise<FoodCandidate[]> {
   const data = await res.json()
   const products = data.products as Array<Record<string, unknown>> | undefined
   if (!products?.length) return []
-  const out: FoodCandidate[] = []
-  for (const p of products) {
+  return products.map((p) => {
     const code = p.code != null ? String(p.code) : null
-    const name = String(p.product_name || p.generic_name || "Food")
-    const brand = p.brands ? String(p.brands).split(",")[0].trim() : null
-    const n = (p.nutriments as Record<string, unknown>) || {}
-    out.push(nutrimentsToCandidate(name, brand, n, code, null, "per 100 g"))
-  }
-  return out
+    return offProductToCandidate(p, code, null)
+  })
 }
 
 function mapUsdaNutrients(nutrients: Array<{ nutrientId?: number; value?: number }>): {
@@ -149,12 +267,132 @@ function mapUsdaNutrients(nutrients: Array<{ nutrientId?: number; value?: number
   return { kcal, protein, carb, fat, fiber, sodiumMg }
 }
 
+function usdaNutrientsExtraFromList(
+  nutrients: Array<{ nutrientId?: number; value?: number; nutrientName?: string }>,
+): Record<string, number> | null {
+  const out: Record<string, number> = {}
+  for (const n of nutrients || []) {
+    const id = n.nutrientId
+    const v = n.value
+    const name = (n.nutrientName || "").toLowerCase()
+    if (v == null || !Number.isFinite(v)) continue
+    if (id === NUTRIENT_IDS.sugarsTotal || id === NUTRIENT_IDS.sugarsLegacy) {
+      out["sugars_g"] = v
+    } else if (
+      out["sugars_g"] == null &&
+      name &&
+      (name === "total sugars" || name.includes("sugars, total") || (name.includes("total") && name.includes("sugar")))
+    ) {
+      out["sugars_g"] = v
+    } else if (id === NUTRIENT_IDS.satFat) out["saturated_fat_g"] = v
+    else if (id === NUTRIENT_IDS.cholesterol) out["cholesterol_mg"] = v
+    else if (id === NUTRIENT_IDS.potassium) out["potassium_mg"] = v
+  }
+  return Object.keys(out).length ? out : null
+}
+
+async function usdaFetchFoodDetail(fdcId: number, apiKey: string): Promise<Record<string, unknown> | null> {
+  try {
+    const url = new URL(`https://api.nal.usda.gov/fdc/v1/food/${fdcId}`)
+    url.searchParams.set("api_key", apiKey)
+    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(12_000) })
+    if (!res.ok) return null
+    return await res.json() as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+function usdaCandidateFromDetail(d: Record<string, unknown>, fdcId: number): FoodCandidate | null {
+  const desc = String(d.description || "Food")
+  const brand = (d.brandName as string) ?? (d.brandOwner as string) ?? null
+  const household = (d.householdServingFullText as string) ?? null
+  const ln = d.labelNutrients as Record<string, { value?: number }> | undefined
+  const ss = num(d.servingSize)
+  const ssu = String(d.servingSizeUnit || "g").toLowerCase()
+
+  if (ln && ss != null && ss > 0 && (ssu === "g" || ssu === "gram" || ssu === "grams" || ssu === "ml")) {
+    const cal = num(ln.calories?.value) ?? 0
+    const protein = num(ln.protein?.value) ?? 0
+    const carb = num(ln.carbohydrates?.value) ?? 0
+    const fat = num(ln.fat?.value) ?? 0
+    const fiber = num(ln.fiber?.value) ?? null
+    const sodium = num(ln.sodium?.value) ?? null
+    const extras: Record<string, number> = {}
+    const sf = num(ln.saturatedFat?.value)
+    const sg = num(ln.sugars?.value)
+    const ch = num(ln.cholesterol?.value)
+    const k = num(ln.potassium?.value)
+    if (sf != null && sf > 0) extras["saturated_fat_g"] = sf
+    if (sg != null && sg > 0) extras["sugars_g"] = sg
+    if (ch != null && ch > 0) extras["cholesterol_mg"] = ch
+    if (k != null && k > 0) extras["potassium_mg"] = k
+    const unitLabel = household ?? `${ss} ${ssu}`
+    return {
+      name: desc,
+      brand,
+      serving_amount: 1,
+      serving_unit: unitLabel,
+      grams: ss,
+      calories: cal,
+      protein_g: protein,
+      carb_g: carb,
+      fat_g: fat,
+      fiber_g: fiber,
+      sodium_mg: sodium,
+      fdc_id: fdcId,
+      external_product_id: null,
+      household_serving_text: household,
+      nutrients_extra: Object.keys(extras).length ? extras : null,
+    }
+  }
+
+  const fn = d.foodNutrients as
+    | Array<{
+      nutrient?: { id?: number; name?: string; number?: string }
+      amount?: number
+      value?: number
+      nutrientId?: number
+    }>
+    | undefined
+  if (!fn?.length) return null
+  const flat: Array<{ nutrientId?: number; value?: number }> = fn.map((x) => {
+    const id = x.nutrient?.id ?? x.nutrientId
+    const val = x.amount ?? x.value
+    return { nutrientId: id, value: val }
+  })
+  const mapped = mapUsdaNutrients(flat)
+  const basis = ss != null && ss > 0 && (ssu === "g" || ssu === "gram" || ssu === "grams") ? ss : 100
+  const factor = basis / 100
+  const extras = usdaNutrientsExtraFromList(flat)
+  const scaledExtras = extras
+    ? Object.fromEntries(Object.entries(extras).map(([k, v]) => [k, v * factor]))
+    : null
+  return {
+    name: desc,
+    brand,
+    serving_amount: basis === 100 ? 100 : 1,
+    serving_unit: basis === 100 ? "per 100 g" : (household ?? `${basis} g`),
+    grams: basis,
+    calories: mapped.kcal * factor,
+    protein_g: mapped.protein * factor,
+    carb_g: mapped.carb * factor,
+    fat_g: mapped.fat * factor,
+    fiber_g: mapped.fiber != null ? mapped.fiber * factor : null,
+    sodium_mg: mapped.sodiumMg != null ? mapped.sodiumMg * factor : null,
+    fdc_id: fdcId,
+    external_product_id: null,
+    household_serving_text: household,
+    nutrients_extra: scaledExtras,
+  }
+}
+
 async function usdaSearchToCandidates(query: string, apiKey: string): Promise<FoodCandidate[]> {
   const url = new URL("https://api.nal.usda.gov/fdc/v1/foods/search")
   url.searchParams.set("api_key", apiKey)
   url.searchParams.set("query", query)
   url.searchParams.set("pageSize", "5")
-  const res = await fetch(url.toString())
+  const res = await fetch(url.toString(), { signal: AbortSignal.timeout(15_000) })
   if (!res.ok) return []
   const data = await res.json()
   const foods = data.foods as Array<{
@@ -164,8 +402,17 @@ async function usdaSearchToCandidates(query: string, apiKey: string): Promise<Fo
     foodNutrients?: Array<{ nutrientId?: number; value?: number }>
   }> | undefined
   if (!foods?.length) return []
+
   const out: FoodCandidate[] = []
   for (const f of foods) {
+    const detail = await usdaFetchFoodDetail(f.fdcId, apiKey)
+    if (detail) {
+      const c = usdaCandidateFromDetail(detail, f.fdcId)
+      if (c) {
+        out.push(c)
+        continue
+      }
+    }
     const mapped = mapUsdaNutrients(f.foodNutrients || [])
     out.push({
       name: f.description,
@@ -181,6 +428,8 @@ async function usdaSearchToCandidates(query: string, apiKey: string): Promise<Fo
       sodium_mg: mapped.sodiumMg,
       fdc_id: f.fdcId,
       external_product_id: null,
+      household_serving_text: null,
+      nutrients_extra: usdaNutrientsExtraFromList(f.foodNutrients || []),
     })
   }
   return out

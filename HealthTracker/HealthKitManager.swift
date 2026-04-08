@@ -52,6 +52,7 @@ class HealthKitManager: ObservableObject {
             .dietaryFatTotal,
             .dietaryFiber,
             .dietarySodium,
+            .dietarySugar,
         ]
         var set = Set<HKSampleType>()
         for id in ids {
@@ -618,6 +619,49 @@ class HealthKitManager: ObservableObject {
 
     // MARK: - Nutrition (write)
 
+    /// Correlates quantity samples with a `nutrition_logs` row for delete-on-edit.
+    static let nutritionLogMetadataKey = "com.healthtracker.nutrition_log_id"
+
+    private let nutritionWriteTypeIdentifiers: [HKQuantityTypeIdentifier] = [
+        .dietaryEnergyConsumed,
+        .dietaryProtein,
+        .dietaryCarbohydrates,
+        .dietaryFatTotal,
+        .dietaryFiber,
+        .dietarySodium,
+        .dietarySugar,
+    ]
+
+    /// Removes nutrition samples previously saved for this meal log (same metadata key on each type).
+    func deleteNutritionSamplesForLog(nutritionLogId: UUID) async {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        guard hasRequestedAuthorization else { return }
+        let key = Self.nutritionLogMetadataKey
+        let value = nutritionLogId.uuidString
+
+        for id in nutritionWriteTypeIdentifiers {
+            guard let type = HKObjectType.quantityType(forIdentifier: id) else { continue }
+            let predicate = HKQuery.predicateForObjects(withMetadataKey: key, allowedValues: [value])
+            let toDelete: [HKSample] = await withCheckedContinuation { continuation in
+                let query = HKSampleQuery(
+                    sampleType: type,
+                    predicate: predicate,
+                    limit: HKObjectQueryNoLimit,
+                    sortDescriptors: nil
+                ) { _, samples, _ in
+                    continuation.resume(returning: samples ?? [])
+                }
+                healthStore.execute(query)
+            }
+            guard !toDelete.isEmpty else { continue }
+            do {
+                try await healthStore.delete(toDelete)
+            } catch {
+                print("HealthKit nutrition delete failed (\(id.rawValue)): \(error.localizedDescription)")
+            }
+        }
+    }
+
     /// Saves one meal as quantity samples at `date` (same timestamp for each nutrient).
     func saveNutritionFromMeal(
         calories: Double,
@@ -626,16 +670,29 @@ class HealthKitManager: ObservableObject {
         fatG: Double,
         fiberG: Double?,
         sodiumMg: Double?,
-        date: Date
+        sugarG: Double? = nil,
+        date: Date,
+        nutritionLogId: UUID? = nil
     ) async {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         guard hasRequestedAuthorization else { return }
+
+        var meta: [String: String]?
+        if let nutritionLogId {
+            meta = [Self.nutritionLogMetadataKey: nutritionLogId.uuidString]
+        }
 
         func save(_ id: HKQuantityTypeIdentifier, value: Double, unit: HKUnit) async {
             guard let type = HKObjectType.quantityType(forIdentifier: id) else { return }
             guard value > 0 else { return }
             let quantity = HKQuantity(unit: unit, doubleValue: value)
-            let sample = HKQuantitySample(type: type, quantity: quantity, start: date, end: date, metadata: nil)
+            let sample = HKQuantitySample(
+                type: type,
+                quantity: quantity,
+                start: date,
+                end: date,
+                metadata: meta
+            )
             do {
                 try await healthStore.save(sample)
             } catch {
@@ -652,6 +709,9 @@ class HealthKitManager: ObservableObject {
         }
         if let na = sodiumMg, na > 0 {
             await save(.dietarySodium, value: na, unit: .gramUnit(with: .milli))
+        }
+        if let su = sugarG, su > 0 {
+            await save(.dietarySugar, value: su, unit: .gram())
         }
     }
 }

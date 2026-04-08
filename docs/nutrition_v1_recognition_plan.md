@@ -101,10 +101,20 @@ Goal: predictable scans on real packaging, clear failures.
 
 ## Optional “V1.1” (not required to close V1)
 
+Full sequencing, schema notes, HealthKit strategy, and exit criteria live in **[nutrition_v1_1_implementation_plan.md](./nutrition_v1_1_implementation_plan.md)**.
+
+**Scope summary:**
+
 - Multi-item logging from one photo (one log, multiple `nutrition_log_items`, summed HealthKit write or per-item samples — product decision).
-- VisionKit `DataScannerViewController` instead of raw AVFoundation (simpler maintenance, similar UX).
-- Thumbnail of `photo_path` in meal list.
-- Offline / retry queue for failed lookups.
+- Typical **serving / household** data from Open Food Facts and USDA (detail where needed), applied as the default portion on confirm—not only implicit 100 g.
+- **Per-item quantity** (e.g. “2 pancakes”) so users multiply label servings without manually doubling grams; stored on `nutrition_log_items` (see implementation plan).
+- **Extended nutrition** beyond core macros, persisted for in-app reference (e.g. `nutrients` JSONB + optional detail UI); HealthKit scope unchanged unless you decide later.
+- VisionKit `DataScannerViewController` instead of raw AVFoundation (simpler maintenance, similar UX), with fallback where unsupported.
+- Thumbnail of `photo_path` in meal list (signed URLs + caching).
+- Favorites / recents for faster re-logging.
+- Meal notes on `nutrition_logs`.
+- Update Apple Health when a meal is edited (metadata correlation + delete/rewrite).
+- Offline / retry queue for failed lookups and saves.
 
 ---
 

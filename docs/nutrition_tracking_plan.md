@@ -89,7 +89,7 @@ Author SQL in the Supabase dashboard (or add a tracked migration file under `sup
 
 **Suggested tables**
 
-- `**nutrition_logs`**: `id`, `user_id` (FK `auth.users`), `logged_at` (timestamptz), optional `meal_type`, `**source**` (`photo` | `barcode` | `manual`), optional `**barcode_raw**` (text, normalized GTIN for barcode flows), optional `photo_path` (Storage path; null for barcode-only logs), `status` (`pending` | `confirmed`), `created_at`.
+- `**nutrition_logs`**: `id`, `user_id` (FK `auth.users`), `logged_at` (timestamptz), optional `meal_type`, `**source`** (`photo` | `barcode` | `manual`), optional `**barcode_raw**` (text, normalized GTIN for barcode flows), optional `photo_path` (Storage path; null for barcode-only logs), `status` (`pending` | `confirmed`), `created_at`.
 - `**nutrition_log_items**`: `id`, `log_id` (FK), `name`, optional `brand`, `serving_amount`, `serving_unit`, `grams` (nullable), `calories`, `protein_g`, `carb_g`, `fat_g`, `fiber_g`, `sodium_mg` (nullable), `fdc_id` (nullable), optional `**external_product_id**` (e.g. Open Food Facts code), optional `nutrients` **jsonb** for extras.
 
 **RLS**: `user_id = auth.uid()` on logs; items join through log ownership.

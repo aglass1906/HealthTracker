@@ -5,24 +5,27 @@ Since modern iOS projects use Xcode's build settings instead of a traditional In
 ## Steps to Enable Background Modes
 
 ### 1. Open Project in Xcode
+
 1. Open `HealthTracker.xcodeproj` in Xcode
 2. Select the **HealthTracker** target in the left sidebar
 3. Go to the **Signing & Capabilities** tab
 
 ### 2. Add Background Modes Capability
+
 1. Click the **+ Capability** button
 2. Search for and add **Background Modes**
 3. In the Background Modes section, check:
-   - ✅ **Background fetch**
-   - ✅ **Background processing**
+  - ✅ **Background fetch**
+  - ✅ **Background processing**
 
 ### 3. Register Background Task Identifier
+
 1. Still in the project target settings
 2. Go to the **Info** tab
 3. Find or add a new key: `BGTaskSchedulerPermittedIdentifiers`
 4. Set it as an Array type
 5. Add one item to the array:
-   - Value: `com.healthtracker.refresh`
+  - Value: `com.healthtracker.refresh`
 
 ## Visual Guide
 
