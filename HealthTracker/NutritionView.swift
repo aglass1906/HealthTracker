@@ -1042,24 +1042,7 @@ struct LogFoodSheet: View {
                             Image(systemName: selectedCandidateOffsets.contains(index) ? "checkmark.circle.fill" : "circle")
                                 .foregroundStyle(selectedCandidateOffsets.contains(index) ? Color.accentColor : .secondary)
                                 .font(.title3)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(c.name)
-                                    .font(.body)
-                                    .foregroundStyle(.primary)
-                                if let b = c.brand, !b.isEmpty {
-                                    Text(b)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                if let h = c.household_serving_text, !h.isEmpty {
-                                    Text(h)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Text("\(Int(c.calories.rounded())) kcal · P \(Int(c.protein_g))g · C \(Int(c.carb_g))g · F \(Int(c.fat_g))g")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
+                            FoodCandidateRowContent(candidate: c)
                         }
                     }
                 } else {
@@ -1068,24 +1051,7 @@ struct LogFoodSheet: View {
                         pendingBarcode = mode == .barcode ? pendingBarcode : nil
                         selectedCandidate = c
                     } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(c.name)
-                                .font(.body)
-                                .foregroundStyle(.primary)
-                            if let b = c.brand, !b.isEmpty {
-                                Text(b)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if let h = c.household_serving_text, !h.isEmpty {
-                                Text(h)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Text("\(Int(c.calories.rounded())) kcal · P \(Int(c.protein_g))g · C \(Int(c.carb_g))g · F \(Int(c.fat_g))g")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
+                        FoodCandidateRowContent(candidate: c)
                     }
                 }
             }
@@ -1151,6 +1117,45 @@ struct LogFoodSheet: View {
         selectedCandidateOffsets.removeAll()
         pendingSource = "photo"
         pendingBarcode = nil
+    }
+}
+
+private struct FoodCandidateRowContent: View {
+    let candidate: FoodCandidateDTO
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            if let urlString = candidate.image_url, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        Color.secondary.opacity(0.15)
+                    }
+                }
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(candidate.name)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                if let b = candidate.brand, !b.isEmpty {
+                    Text(b)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let h = candidate.household_serving_text, !h.isEmpty {
+                    Text(h)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Text("\(Int(candidate.calories.rounded())) kcal · P \(Int(candidate.protein_g))g · C \(Int(candidate.carb_g))g · F \(Int(candidate.fat_g))g")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
     }
 }
 

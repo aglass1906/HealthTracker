@@ -22,6 +22,7 @@ type FoodCandidate = {
   external_product_id: string | null
   household_serving_text?: string | null
   nutrients_extra?: Record<string, number> | null
+  image_url?: string | null
 }
 
 const NUTRIENT_IDS = {
@@ -112,6 +113,11 @@ function offProductToCandidate(
   const ndp = String(p.nutrition_data_per ?? "100g").toLowerCase()
   const household = offHouseholdText(p)
   const servingGrams = household ? parseServingGramsFromString(household) : null
+  const imageUrl =
+    (p.image_front_small_url as string | null) ??
+    (p.image_front_url as string | null) ??
+    (p.image_url as string | null) ??
+    null
 
   const preferServing =
     ndp.includes("serving") ||
@@ -141,6 +147,7 @@ function offProductToCandidate(
       external_product_id: externalId,
       household_serving_text: household,
       nutrients_extra: offNutrientsExtra(n, true),
+      image_url: imageUrl,
     }
   }
 
@@ -174,6 +181,7 @@ function offProductToCandidate(
       external_product_id: externalId,
       household_serving_text: household,
       nutrients_extra: scaledExtra,
+      image_url: imageUrl,
     }
   }
 
@@ -193,6 +201,7 @@ function offProductToCandidate(
     external_product_id: externalId,
     household_serving_text: household,
     nutrients_extra: offNutrientsExtra(n, false),
+    image_url: imageUrl,
   }
 }
 
