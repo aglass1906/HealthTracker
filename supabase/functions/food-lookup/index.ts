@@ -560,11 +560,17 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         })
       }
-      if (usdaKey) {
-        candidates = await usdaSearchToCandidates(q, usdaKey)
-      }
-      if (!candidates.length) {
-        candidates = await openFoodFactsSearch(q)
+      const [usdaResults, offResults] = await Promise.all([
+        usdaKey ? usdaSearchToCandidates(q, usdaKey) : Promise.resolve([] as FoodCandidate[]),
+        openFoodFactsSearch(q),
+      ])
+      const seen = new Set<string>()
+      for (const c of [...usdaResults, ...offResults]) {
+        const key = `${c.name.toLowerCase().trim()}|${(c.brand ?? "").toLowerCase().trim()}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          candidates.push(c)
+        }
       }
       if (!candidates.length) notice = "No foods matched your search."
     } else if (mode === "photo") {
