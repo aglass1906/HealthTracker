@@ -1141,9 +1141,21 @@ private struct FoodCandidateRowContent: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text(candidate.name)
-                    .font(.body)
-                    .foregroundStyle(.primary)
+                HStack(alignment: .center, spacing: 6) {
+                    Text(candidate.name)
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                    if let src = candidate.source {
+                        Text(src == "usda" ? "USDA" : "OFF")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(src == "usda" ? Color.blue.opacity(0.15) : Color.green.opacity(0.15))
+                            .foregroundStyle(src == "usda" ? Color.blue : Color.green)
+                            .clipShape(Capsule())
+                    }
+                }
                 if let b = candidate.brand, !b.isEmpty {
                     Text(b)
                         .font(.caption)
@@ -1291,6 +1303,7 @@ struct ConfirmFoodSheet: View {
     @State private var mealNotes: String = ""
     @State private var showReferenceNutrients = false
     @State private var displayImageUrl: String?
+    @State private var imageLoadFailed = false
 
     init(
         baseCandidate: FoodCandidateDTO,
@@ -1321,12 +1334,14 @@ struct ConfirmFoodSheet: View {
 
     @ViewBuilder
     private var imageSection: some View {
-        if let urlString = displayImageUrl, let url = URL(string: urlString) {
+        if let urlString = displayImageUrl, !imageLoadFailed, let url = URL(string: urlString) {
             Section {
                 AsyncImage(url: url) { phase in
                     if case .success(let image) = phase {
                         image.resizable().scaledToFill()
-                    } else if case .empty = phase {
+                    } else if case .failure(_) = phase {
+                        Color.clear.onAppear { imageLoadFailed = true }
+                    } else {
                         Color.secondary.opacity(0.15)
                     }
                 }
@@ -1335,32 +1350,32 @@ struct ConfirmFoodSheet: View {
                 .clipped()
             }
             .listRowInsets(EdgeInsets())
-        } else {
-            let alternatives = otherCandidates.compactMap { $0.image_url }.prefix(8)
-            if !alternatives.isEmpty {
-                Section("No image — tap one to use") {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10) {
-                            ForEach(Array(alternatives.enumerated()), id: \.offset) { _, urlString in
-                                if let url = URL(string: urlString) {
-                                    Button {
-                                        displayImageUrl = urlString
-                                    } label: {
-                                        AsyncImage(url: url) { phase in
-                                            if case .success(let image) = phase {
-                                                image.resizable().scaledToFill()
-                                            } else if case .empty = phase {
-                                                Color.secondary.opacity(0.15)
-                                            }
+        }
+        let alternatives = Array(otherCandidates.compactMap { $0.image_url }.prefix(8))
+        if !alternatives.isEmpty && (displayImageUrl == nil || imageLoadFailed) {
+            Section("No image — tap one to use") {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(alternatives.indices, id: \.self) { i in
+                            if let url = URL(string: alternatives[i]) {
+                                Button {
+                                    displayImageUrl = alternatives[i]
+                                    imageLoadFailed = false
+                                } label: {
+                                    AsyncImage(url: url) { phase in
+                                        if case .success(let image) = phase {
+                                            image.resizable().scaledToFill()
+                                        } else if case .empty = phase {
+                                            Color.secondary.opacity(0.15)
                                         }
-                                        .frame(width: 72, height: 72)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
                                     }
+                                    .frame(width: 72, height: 72)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
                                 }
                             }
                         }
-                        .padding(.vertical, 6)
                     }
+                    .padding(.vertical, 6)
                 }
             }
         }

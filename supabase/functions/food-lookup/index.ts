@@ -23,6 +23,7 @@ type FoodCandidate = {
   household_serving_text?: string | null
   nutrients_extra?: Record<string, number> | null
   image_url?: string | null
+  source: "usda" | "off"
 }
 
 const NUTRIENT_IDS = {
@@ -148,6 +149,7 @@ function offProductToCandidate(
       household_serving_text: household,
       nutrients_extra: offNutrientsExtra(n, true),
       image_url: imageUrl,
+      source: "off",
     }
   }
 
@@ -182,6 +184,7 @@ function offProductToCandidate(
       household_serving_text: household,
       nutrients_extra: scaledExtra,
       image_url: imageUrl,
+      source: "off",
     }
   }
 
@@ -202,6 +205,7 @@ function offProductToCandidate(
     household_serving_text: household,
     nutrients_extra: offNutrientsExtra(n, false),
     image_url: imageUrl,
+    source: "off",
   }
 }
 
@@ -353,6 +357,7 @@ function usdaCandidateFromDetail(d: Record<string, unknown>, fdcId: number): Foo
       external_product_id: null,
       household_serving_text: household,
       nutrients_extra: Object.keys(extras).length ? extras : null,
+      source: "usda",
     }
   }
 
@@ -393,6 +398,7 @@ function usdaCandidateFromDetail(d: Record<string, unknown>, fdcId: number): Foo
     external_product_id: null,
     household_serving_text: household,
     nutrients_extra: scaledExtras,
+    source: "usda",
   }
 }
 
@@ -439,6 +445,7 @@ async function usdaSearchToCandidates(query: string, apiKey: string): Promise<Fo
       external_product_id: null,
       household_serving_text: null,
       nutrients_extra: usdaNutrientsExtraFromList(f.foodNutrients || []),
+      source: "usda",
     })
   }
   return out
@@ -451,21 +458,11 @@ function spoonacularImageUrl(foodName: string): string {
   return `https://spoonacular.com/cdn/ingredients_100x100/${slug}.jpg`
 }
 
-/** For candidates missing an image, try OFF search then fall back to Spoonacular CDN. */
-async function fillMissingImages(candidates: FoodCandidate[]): Promise<void> {
-  const missing = candidates.filter((c) => !c.image_url)
-  if (!missing.length) return
-  await Promise.all(
-    missing.map(async (c) => {
-      const results = await openFoodFactsSearch(c.name)
-      const withImage = results.find((r) => r.image_url)
-      if (withImage?.image_url) {
-        c.image_url = withImage.image_url
-      } else {
-        c.image_url = spoonacularImageUrl(c.name)
-      }
-    }),
-  )
+/** Assign Spoonacular CDN URLs to candidates missing an image (no extra network calls). */
+function fillMissingImages(candidates: FoodCandidate[]): void {
+  for (const c of candidates) {
+    if (!c.image_url) c.image_url = spoonacularImageUrl(c.name)
+  }
 }
 
 async function openaiDescribeFoods(
@@ -608,7 +605,7 @@ Deno.serve(async (req) => {
       if (!candidates.length) {
         notice = "No foods matched your search."
       } else {
-        await fillMissingImages(candidates)
+        fillMissingImages(candidates)
       }
     } else if (mode === "photo") {
       const b64 = json.image_base64
