@@ -241,15 +241,24 @@ async function openFoodFactsSearch(q: string): Promise<FoodCandidate[]> {
     `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${
       encodeURIComponent(q)
     }&search_simple=1&action=process&json=1&page_size=5`
-  const res = await fetch(url)
-  if (!res.ok) return []
-  const data = await res.json()
-  const products = data.products as Array<Record<string, unknown>> | undefined
-  if (!products?.length) return []
-  return products.map((p) => {
-    const code = p.code != null ? String(p.code) : null
-    return offProductToCandidate(p, code, null)
-  })
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(8_000) })
+    if (!res.ok) {
+      console.error(`OFF search HTTP ${res.status} for query: ${q}`)
+      return []
+    }
+    const data = await res.json()
+    const products = data.products as Array<Record<string, unknown>> | undefined
+    console.log(`OFF search returned ${products?.length ?? 0} results for: ${q}`)
+    if (!products?.length) return []
+    return products.map((p) => {
+      const code = p.code != null ? String(p.code) : null
+      return offProductToCandidate(p, code, null)
+    })
+  } catch (e) {
+    console.error(`OFF search failed for query "${q}":`, e)
+    return []
+  }
 }
 
 function mapUsdaNutrients(nutrients: Array<{ nutrientId?: number; value?: number }>): {
