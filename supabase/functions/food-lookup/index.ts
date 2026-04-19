@@ -460,19 +460,6 @@ async function usdaSearchToCandidates(query: string, apiKey: string): Promise<Fo
   return out
 }
 
-/** Spoonacular ingredient image CDN — no API key required. */
-function spoonacularImageUrl(foodName: string): string {
-  const primary = foodName.split(",")[0].trim().toLowerCase()
-  const slug = primary.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
-  return `https://spoonacular.com/cdn/ingredients_100x100/${slug}.jpg`
-}
-
-/** Assign Spoonacular CDN URLs to candidates missing an image (no extra network calls). */
-function fillMissingImages(candidates: FoodCandidate[]): void {
-  for (const c of candidates) {
-    if (!c.image_url) c.image_url = spoonacularImageUrl(c.name)
-  }
-}
 
 async function openaiDescribeFoods(
   imageBase64: string,
@@ -611,11 +598,7 @@ Deno.serve(async (req) => {
           candidates.push(c)
         }
       }
-      if (!candidates.length) {
-        notice = "No foods matched your search."
-      } else {
-        fillMissingImages(candidates)
-      }
+      if (!candidates.length) notice = "No foods matched your search."
     } else if (mode === "photo") {
       const b64 = json.image_base64
       const mime = json.mime_type || "image/jpeg"
