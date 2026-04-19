@@ -1319,58 +1319,57 @@ struct ConfirmFoodSheet: View {
         _displayImageUrl = State(initialValue: baseCandidate.image_url)
     }
 
+    @ViewBuilder
+    private var imageSection: some View {
+        if let urlString = displayImageUrl, let url = URL(string: urlString) {
+            Section {
+                AsyncImage(url: url) { phase in
+                    if case .success(let image) = phase {
+                        image.resizable().scaledToFill()
+                    } else if case .empty = phase {
+                        Color.secondary.opacity(0.15)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 200)
+                .clipped()
+            }
+            .listRowInsets(EdgeInsets())
+        } else {
+            let alternatives = otherCandidates.compactMap { $0.image_url }.prefix(8)
+            if !alternatives.isEmpty {
+                Section("No image — tap one to use") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(Array(alternatives.enumerated()), id: \.offset) { _, urlString in
+                                if let url = URL(string: urlString) {
+                                    Button {
+                                        displayImageUrl = urlString
+                                    } label: {
+                                        AsyncImage(url: url) { phase in
+                                            if case .success(let image) = phase {
+                                                image.resizable().scaledToFill()
+                                            } else if case .empty = phase {
+                                                Color.secondary.opacity(0.15)
+                                            }
+                                        }
+                                        .frame(width: 72, height: 72)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.vertical, 6)
+                    }
+                }
+            }
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                if let urlString = displayImageUrl, let url = URL(string: urlString) {
-                    Section {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image.resizable().scaledToFill()
-                            case .empty:
-                                Color.secondary.opacity(0.15)
-                            default:
-                                EmptyView()
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 200)
-                        .clipped()
-                    }
-                    .listRowInsets(EdgeInsets())
-                } else {
-                    let alternatives = otherCandidates.compactMap(\.image_url).prefix(8)
-                    if !alternatives.isEmpty {
-                        Section("No image — tap one to use") {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 10) {
-                                    ForEach(Array(alternatives.enumerated()), id: \.offset) { _, urlString in
-                                        if let url = URL(string: urlString) {
-                                            Button {
-                                                displayImageUrl = urlString
-                                            } label: {
-                                                AsyncImage(url: url) { phase in
-                                                    switch phase {
-                                                    case .success(let image):
-                                                        image.resizable().scaledToFill()
-                                                    case .empty:
-                                                        Color.secondary.opacity(0.15)
-                                                    default:
-                                                        EmptyView()
-                                                    }
-                                                }
-                                                .frame(width: 72, height: 72)
-                                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                                            }
-                                        }
-                                    }
-                                }
-                                .padding(.vertical, 6)
-                            }
-                        }
-                    }
-                }
+                imageSection
                 Section(header: Text(baseCandidate.name)) {
                     if let b = baseCandidate.brand, !b.isEmpty {
                         Text(b)
