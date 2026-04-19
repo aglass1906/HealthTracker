@@ -444,6 +444,30 @@ async function usdaSearchToCandidates(query: string, apiKey: string): Promise<Fo
   return out
 }
 
+/** Spoonacular ingredient image CDN — no API key required. */
+function spoonacularImageUrl(foodName: string): string {
+  const primary = foodName.split(",")[0].trim().toLowerCase()
+  const slug = primary.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+  return `https://spoonacular.com/cdn/ingredients_100x100/${slug}.jpg`
+}
+
+/** For candidates missing an image, try OFF search then fall back to Spoonacular CDN. */
+async function fillMissingImages(candidates: FoodCandidate[]): Promise<void> {
+  const missing = candidates.filter((c) => !c.image_url)
+  if (!missing.length) return
+  await Promise.all(
+    missing.map(async (c) => {
+      const results = await openFoodFactsSearch(c.name)
+      const withImage = results.find((r) => r.image_url)
+      if (withImage?.image_url) {
+        c.image_url = withImage.image_url
+      } else {
+        c.image_url = spoonacularImageUrl(c.name)
+      }
+    }),
+  )
+}
+
 async function openaiDescribeFoods(
   imageBase64: string,
   mimeType: string,
@@ -581,7 +605,11 @@ Deno.serve(async (req) => {
           candidates.push(c)
         }
       }
-      if (!candidates.length) notice = "No foods matched your search."
+      if (!candidates.length) {
+        notice = "No foods matched your search."
+      } else {
+        await fillMissingImages(candidates)
+      }
     } else if (mode === "photo") {
       const b64 = json.image_base64
       const mime = json.mime_type || "image/jpeg"

@@ -1130,8 +1130,10 @@ private struct FoodCandidateRowContent: View {
                     switch phase {
                     case .success(let image):
                         image.resizable().scaledToFill()
-                    default:
+                    case .empty:
                         Color.secondary.opacity(0.15)
+                    default:
+                        EmptyView()
                     }
                 }
                 .frame(width: 44, height: 44)
