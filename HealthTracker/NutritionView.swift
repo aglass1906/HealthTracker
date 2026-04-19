@@ -779,6 +779,7 @@ struct LogFoodSheet: View {
             .sheet(item: $selectedCandidate) { c in
                 ConfirmFoodSheet(
                     baseCandidate: c,
+                    otherCandidates: candidates.filter { $0.id != c.id },
                     loggedAt: $loggedAt,
                     mealCategory: $mealCategory,
                     syncToHealthKit: syncToHealthKit,
@@ -1272,6 +1273,7 @@ private struct ManageNutritionFavoritesSheet: View {
 
 struct ConfirmFoodSheet: View {
     let baseCandidate: FoodCandidateDTO
+    let otherCandidates: [FoodCandidateDTO]
     @Binding var loggedAt: Date
     @Binding var mealCategory: MealCategory
     let syncToHealthKit: Bool
@@ -1288,9 +1290,11 @@ struct ConfirmFoodSheet: View {
     @State private var gramsText: String
     @State private var mealNotes: String = ""
     @State private var showReferenceNutrients = false
+    @State private var displayImageUrl: String?
 
     init(
         baseCandidate: FoodCandidateDTO,
+        otherCandidates: [FoodCandidateDTO] = [],
         loggedAt: Binding<Date>,
         mealCategory: Binding<MealCategory>,
         syncToHealthKit: Bool,
@@ -1301,6 +1305,7 @@ struct ConfirmFoodSheet: View {
         onDone: @escaping () -> Void
     ) {
         self.baseCandidate = baseCandidate
+        self.otherCandidates = otherCandidates
         _loggedAt = loggedAt
         _mealCategory = mealCategory
         self.syncToHealthKit = syncToHealthKit
@@ -1311,11 +1316,61 @@ struct ConfirmFoodSheet: View {
         self.onDone = onDone
         let g = max(baseCandidate.grams ?? 100, 1)
         _gramsText = State(initialValue: String(format: "%.0f", g))
+        _displayImageUrl = State(initialValue: baseCandidate.image_url)
     }
 
     var body: some View {
         NavigationStack {
             Form {
+                if let urlString = displayImageUrl, let url = URL(string: urlString) {
+                    Section {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().scaledToFill()
+                            case .empty:
+                                Color.secondary.opacity(0.15)
+                            default:
+                                EmptyView()
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 200)
+                        .clipped()
+                    }
+                    .listRowInsets(EdgeInsets())
+                } else {
+                    let alternatives = otherCandidates.compactMap(\.image_url).prefix(8)
+                    if !alternatives.isEmpty {
+                        Section("No image — tap one to use") {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 10) {
+                                    ForEach(Array(alternatives.enumerated()), id: \.offset) { _, urlString in
+                                        if let url = URL(string: urlString) {
+                                            Button {
+                                                displayImageUrl = urlString
+                                            } label: {
+                                                AsyncImage(url: url) { phase in
+                                                    switch phase {
+                                                    case .success(let image):
+                                                        image.resizable().scaledToFill()
+                                                    case .empty:
+                                                        Color.secondary.opacity(0.15)
+                                                    default:
+                                                        EmptyView()
+                                                    }
+                                                }
+                                                .frame(width: 72, height: 72)
+                                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(.vertical, 6)
+                            }
+                        }
+                    }
+                }
                 Section(header: Text(baseCandidate.name)) {
                     if let b = baseCandidate.brand, !b.isEmpty {
                         Text(b)
