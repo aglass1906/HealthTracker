@@ -779,6 +779,7 @@ struct LogFoodSheet: View {
             .sheet(item: $selectedCandidate) { c in
                 ConfirmFoodSheet(
                     baseCandidate: c,
+                    otherCandidates: candidates.filter { $0.id != c.id },
                     loggedAt: $loggedAt,
                     mealCategory: $mealCategory,
                     syncToHealthKit: syncToHealthKit,
@@ -1042,24 +1043,7 @@ struct LogFoodSheet: View {
                             Image(systemName: selectedCandidateOffsets.contains(index) ? "checkmark.circle.fill" : "circle")
                                 .foregroundStyle(selectedCandidateOffsets.contains(index) ? Color.accentColor : .secondary)
                                 .font(.title3)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(c.name)
-                                    .font(.body)
-                                    .foregroundStyle(.primary)
-                                if let b = c.brand, !b.isEmpty {
-                                    Text(b)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                if let h = c.household_serving_text, !h.isEmpty {
-                                    Text(h)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Text("\(Int(c.calories.rounded())) kcal · P \(Int(c.protein_g))g · C \(Int(c.carb_g))g · F \(Int(c.fat_g))g")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
+                            FoodCandidateRowContent(candidate: c)
                         }
                     }
                 } else {
@@ -1068,24 +1052,7 @@ struct LogFoodSheet: View {
                         pendingBarcode = mode == .barcode ? pendingBarcode : nil
                         selectedCandidate = c
                     } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(c.name)
-                                .font(.body)
-                                .foregroundStyle(.primary)
-                            if let b = c.brand, !b.isEmpty {
-                                Text(b)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if let h = c.household_serving_text, !h.isEmpty {
-                                Text(h)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Text("\(Int(c.calories.rounded())) kcal · P \(Int(c.protein_g))g · C \(Int(c.carb_g))g · F \(Int(c.fat_g))g")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
+                        FoodCandidateRowContent(candidate: c)
                     }
                 }
             }
@@ -1151,6 +1118,59 @@ struct LogFoodSheet: View {
         selectedCandidateOffsets.removeAll()
         pendingSource = "photo"
         pendingBarcode = nil
+    }
+}
+
+private struct FoodCandidateRowContent: View {
+    let candidate: FoodCandidateDTO
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            if let urlString = candidate.image_url, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    case .empty:
+                        Color.secondary.opacity(0.15)
+                    default:
+                        EmptyView()
+                    }
+                }
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .center, spacing: 6) {
+                    Text(candidate.name)
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                    if let src = candidate.source {
+                        Text(src == "usda" ? "USDA" : "OFF")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(src == "usda" ? Color.blue.opacity(0.15) : Color.green.opacity(0.15))
+                            .foregroundStyle(src == "usda" ? Color.blue : Color.green)
+                            .clipShape(Capsule())
+                    }
+                }
+                if let b = candidate.brand, !b.isEmpty {
+                    Text(b)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let h = candidate.household_serving_text, !h.isEmpty {
+                    Text(h)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Text("\(Int(candidate.calories.rounded())) kcal · P \(Int(candidate.protein_g))g · C \(Int(candidate.carb_g))g · F \(Int(candidate.fat_g))g")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
     }
 }
 
@@ -1265,6 +1285,7 @@ private struct ManageNutritionFavoritesSheet: View {
 
 struct ConfirmFoodSheet: View {
     let baseCandidate: FoodCandidateDTO
+    let otherCandidates: [FoodCandidateDTO]
     @Binding var loggedAt: Date
     @Binding var mealCategory: MealCategory
     let syncToHealthKit: Bool
@@ -1281,9 +1302,12 @@ struct ConfirmFoodSheet: View {
     @State private var gramsText: String
     @State private var mealNotes: String = ""
     @State private var showReferenceNutrients = false
+    @State private var displayImageUrl: String?
+    @State private var imageLoadFailed = false
 
     init(
         baseCandidate: FoodCandidateDTO,
+        otherCandidates: [FoodCandidateDTO] = [],
         loggedAt: Binding<Date>,
         mealCategory: Binding<MealCategory>,
         syncToHealthKit: Bool,
@@ -1294,6 +1318,7 @@ struct ConfirmFoodSheet: View {
         onDone: @escaping () -> Void
     ) {
         self.baseCandidate = baseCandidate
+        self.otherCandidates = otherCandidates
         _loggedAt = loggedAt
         _mealCategory = mealCategory
         self.syncToHealthKit = syncToHealthKit
@@ -1304,11 +1329,62 @@ struct ConfirmFoodSheet: View {
         self.onDone = onDone
         let g = max(baseCandidate.grams ?? 100, 1)
         _gramsText = State(initialValue: String(format: "%.0f", g))
+        _displayImageUrl = State(initialValue: baseCandidate.image_url)
+    }
+
+    @ViewBuilder
+    private var imageSection: some View {
+        if let urlString = displayImageUrl, !imageLoadFailed, let url = URL(string: urlString) {
+            Section {
+                AsyncImage(url: url) { phase in
+                    if case .success(let image) = phase {
+                        image.resizable().scaledToFill()
+                    } else if case .failure(_) = phase {
+                        Color.clear.onAppear { imageLoadFailed = true }
+                    } else {
+                        Color.secondary.opacity(0.15)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 200)
+                .clipped()
+            }
+            .listRowInsets(EdgeInsets())
+        }
+        let alternatives = Array(otherCandidates.compactMap { $0.image_url }.prefix(8))
+        if !alternatives.isEmpty && (displayImageUrl == nil || imageLoadFailed) {
+            Section("No image — tap one to use") {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(alternatives.indices, id: \.self) { i in
+                            if let url = URL(string: alternatives[i]) {
+                                Button {
+                                    displayImageUrl = alternatives[i]
+                                    imageLoadFailed = false
+                                } label: {
+                                    AsyncImage(url: url) { phase in
+                                        if case .success(let image) = phase {
+                                            image.resizable().scaledToFill()
+                                        } else if case .empty = phase {
+                                            Color.secondary.opacity(0.15)
+                                        }
+                                    }
+                                    .frame(width: 72, height: 72)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                }
+                            }
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+            }
+        }
     }
 
     var body: some View {
         NavigationStack {
             Form {
+                imageSection
                 Section(header: Text(baseCandidate.name)) {
                     if let b = baseCandidate.brand, !b.isEmpty {
                         Text(b)

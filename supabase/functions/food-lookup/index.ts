@@ -22,6 +22,8 @@ type FoodCandidate = {
   external_product_id: string | null
   household_serving_text?: string | null
   nutrients_extra?: Record<string, number> | null
+  image_url?: string | null
+  source: "usda" | "off"
 }
 
 const NUTRIENT_IDS = {
@@ -112,6 +114,11 @@ function offProductToCandidate(
   const ndp = String(p.nutrition_data_per ?? "100g").toLowerCase()
   const household = offHouseholdText(p)
   const servingGrams = household ? parseServingGramsFromString(household) : null
+  const imageUrl =
+    (p.image_front_small_url as string | null) ??
+    (p.image_front_url as string | null) ??
+    (p.image_url as string | null) ??
+    null
 
   const preferServing =
     ndp.includes("serving") ||
@@ -141,6 +148,8 @@ function offProductToCandidate(
       external_product_id: externalId,
       household_serving_text: household,
       nutrients_extra: offNutrientsExtra(n, true),
+      image_url: imageUrl,
+      source: "off",
     }
   }
 
@@ -174,6 +183,8 @@ function offProductToCandidate(
       external_product_id: externalId,
       household_serving_text: household,
       nutrients_extra: scaledExtra,
+      image_url: imageUrl,
+      source: "off",
     }
   }
 
@@ -193,6 +204,8 @@ function offProductToCandidate(
     external_product_id: externalId,
     household_serving_text: household,
     nutrients_extra: offNutrientsExtra(n, false),
+    image_url: imageUrl,
+    source: "off",
   }
 }
 
@@ -228,15 +241,24 @@ async function openFoodFactsSearch(q: string): Promise<FoodCandidate[]> {
     `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${
       encodeURIComponent(q)
     }&search_simple=1&action=process&json=1&page_size=5`
-  const res = await fetch(url)
-  if (!res.ok) return []
-  const data = await res.json()
-  const products = data.products as Array<Record<string, unknown>> | undefined
-  if (!products?.length) return []
-  return products.map((p) => {
-    const code = p.code != null ? String(p.code) : null
-    return offProductToCandidate(p, code, null)
-  })
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(8_000) })
+    if (!res.ok) {
+      console.error(`OFF search HTTP ${res.status} for query: ${q}`)
+      return []
+    }
+    const data = await res.json()
+    const products = data.products as Array<Record<string, unknown>> | undefined
+    console.log(`OFF search returned ${products?.length ?? 0} results for: ${q}`)
+    if (!products?.length) return []
+    return products.map((p) => {
+      const code = p.code != null ? String(p.code) : null
+      return offProductToCandidate(p, code, null)
+    })
+  } catch (e) {
+    console.error(`OFF search failed for query "${q}":`, e)
+    return []
+  }
 }
 
 function mapUsdaNutrients(nutrients: Array<{ nutrientId?: number; value?: number }>): {
@@ -344,6 +366,7 @@ function usdaCandidateFromDetail(d: Record<string, unknown>, fdcId: number): Foo
       external_product_id: null,
       household_serving_text: household,
       nutrients_extra: Object.keys(extras).length ? extras : null,
+      source: "usda",
     }
   }
 
@@ -384,6 +407,7 @@ function usdaCandidateFromDetail(d: Record<string, unknown>, fdcId: number): Foo
     external_product_id: null,
     household_serving_text: household,
     nutrients_extra: scaledExtras,
+    source: "usda",
   }
 }
 
@@ -430,9 +454,39 @@ async function usdaSearchToCandidates(query: string, apiKey: string): Promise<Fo
       external_product_id: null,
       household_serving_text: null,
       nutrients_extra: usdaNutrientsExtraFromList(f.foodNutrients || []),
+      source: "usda",
     })
   }
   return out
+}
+
+
+/** Fetch a thumbnail from Wikipedia for a food name. Returns null if no article/image found. */
+async function wikipediaImageUrl(foodName: string): Promise<string | null> {
+  const primary = foodName.split(",")[0].trim()
+  const title = encodeURIComponent(primary.replace(/\s+/g, "_"))
+  try {
+    const res = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${title}`,
+      { signal: AbortSignal.timeout(5_000) },
+    )
+    if (!res.ok) return null
+    const data = await res.json() as { thumbnail?: { source?: string } }
+    return data.thumbnail?.source ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Fill missing images on USDA candidates using Wikipedia thumbnails (parallel). */
+async function fillMissingImages(candidates: FoodCandidate[]): Promise<void> {
+  const missing = candidates.filter((c) => !c.image_url && c.source === "usda")
+  if (!missing.length) return
+  await Promise.all(
+    missing.map(async (c) => {
+      c.image_url = await wikipediaImageUrl(c.name)
+    }),
+  )
 }
 
 async function openaiDescribeFoods(
@@ -560,13 +614,23 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         })
       }
-      if (usdaKey) {
-        candidates = await usdaSearchToCandidates(q, usdaKey)
+      const [usdaResults, offResults] = await Promise.all([
+        usdaKey ? usdaSearchToCandidates(q, usdaKey) : Promise.resolve([] as FoodCandidate[]),
+        openFoodFactsSearch(q),
+      ])
+      const seen = new Set<string>()
+      for (const c of [...usdaResults, ...offResults]) {
+        const key = `${c.name.toLowerCase().trim()}|${(c.brand ?? "").toLowerCase().trim()}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          candidates.push(c)
+        }
       }
       if (!candidates.length) {
-        candidates = await openFoodFactsSearch(q)
+        notice = "No foods matched your search."
+      } else {
+        await fillMissingImages(candidates)
       }
-      if (!candidates.length) notice = "No foods matched your search."
     } else if (mode === "photo") {
       const b64 = json.image_base64
       const mime = json.mime_type || "image/jpeg"
