@@ -461,6 +461,34 @@ async function usdaSearchToCandidates(query: string, apiKey: string): Promise<Fo
 }
 
 
+/** Fetch a thumbnail from Wikipedia for a food name. Returns null if no article/image found. */
+async function wikipediaImageUrl(foodName: string): Promise<string | null> {
+  const primary = foodName.split(",")[0].trim()
+  const title = encodeURIComponent(primary.replace(/\s+/g, "_"))
+  try {
+    const res = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${title}`,
+      { signal: AbortSignal.timeout(5_000) },
+    )
+    if (!res.ok) return null
+    const data = await res.json() as { thumbnail?: { source?: string } }
+    return data.thumbnail?.source ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Fill missing images on USDA candidates using Wikipedia thumbnails (parallel). */
+async function fillMissingImages(candidates: FoodCandidate[]): Promise<void> {
+  const missing = candidates.filter((c) => !c.image_url && c.source === "usda")
+  if (!missing.length) return
+  await Promise.all(
+    missing.map(async (c) => {
+      c.image_url = await wikipediaImageUrl(c.name)
+    }),
+  )
+}
+
 async function openaiDescribeFoods(
   imageBase64: string,
   mimeType: string,
@@ -598,7 +626,11 @@ Deno.serve(async (req) => {
           candidates.push(c)
         }
       }
-      if (!candidates.length) notice = "No foods matched your search."
+      if (!candidates.length) {
+        notice = "No foods matched your search."
+      } else {
+        await fillMissingImages(candidates)
+      }
     } else if (mode === "photo") {
       const b64 = json.image_base64
       const mime = json.mime_type || "image/jpeg"
