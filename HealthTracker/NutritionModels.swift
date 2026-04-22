@@ -12,6 +12,16 @@ enum MealCategory: String, CaseIterable, Identifiable, Sendable {
     case snack = "Snack"
 
     var id: String { rawValue }
+
+    static func defaultForCurrentTime() -> MealCategory {
+        let hour = Calendar.current.component(.hour, from: Date())
+        switch hour {
+        case 5 ..< 10: return .breakfast
+        case 10 ..< 15: return .lunch
+        case 15 ..< 21: return .dinner
+        default: return .snack
+        }
+    }
 }
 
 struct NutritionLogRow: Codable, Identifiable, Hashable {
@@ -47,6 +57,7 @@ struct NutritionLogItemRow: Codable, Identifiable, Hashable {
     var fdc_id: Int64?
     var external_product_id: String?
     var nutrients: [String: Double]?
+    var combo_name: String?
 
     /// Sugar from `nutrients` JSON (e.g. food-lookup `sugars_g`). Zero when not provided.
     var sugarGramsFromNutrients: Double {
@@ -220,5 +231,48 @@ enum NutritionFavoritesStore {
         } else {
             add(candidate)
         }
+    }
+}
+
+// MARK: - Combo / recipe models
+
+struct ComboItem: Codable {
+    var candidate: FoodCandidateDTO
+    var quantity: Double
+}
+
+struct ComboFavorite: Codable, Identifiable {
+    var id: UUID = UUID()
+    var name: String
+    var items: [ComboItem]
+    var createdAt: Date = Date()
+}
+
+enum ComboFavoritesStore {
+    private static let key = "nutrition_combo_favorites_v1"
+    private static let maxCount = 20
+
+    static func load() -> [ComboFavorite] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let decoded = try? JSONDecoder().decode([ComboFavorite].self, from: data)
+        else { return [] }
+        return decoded
+    }
+
+    private static func save(_ combos: [ComboFavorite]) {
+        if let data = try? JSONEncoder().encode(combos) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
+    }
+
+    static func upsert(_ combo: ComboFavorite) {
+        var list = load().filter { $0.id != combo.id }
+        list.insert(combo, at: 0)
+        if list.count > maxCount { list = Array(list.prefix(maxCount)) }
+        save(list)
+    }
+
+    static func delete(_ id: UUID) {
+        save(load().filter { $0.id != id })
     }
 }

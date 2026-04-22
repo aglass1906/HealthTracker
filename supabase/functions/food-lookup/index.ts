@@ -226,6 +226,7 @@ function hasValidGtinCheckDigit(raw: string): boolean {
   return expected === check
 }
 
+
 async function openFoodFactsBarcode(code: string): Promise<FoodCandidate[]> {
   const url = `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`
   const res = await fetch(url)
@@ -480,7 +481,7 @@ async function wikipediaImageUrl(foodName: string): Promise<string | null> {
 
 /** Fill missing images on USDA candidates using Wikipedia thumbnails (parallel). */
 async function fillMissingImages(candidates: FoodCandidate[]): Promise<void> {
-  const missing = candidates.filter((c) => !c.image_url && c.source === "usda")
+  const missing = candidates.filter((c) => !c.image_url)
   if (!missing.length) return
   await Promise.all(
     missing.map(async (c) => {
@@ -581,7 +582,6 @@ Deno.serve(async (req) => {
     const mode = json.mode
     const usdaKey = Deno.env.get("USDA_API_KEY") ?? ""
     const openaiKey = Deno.env.get("OPENAI_API_KEY") ?? ""
-
     let candidates: FoodCandidate[] = []
     let notice: string | undefined
 
@@ -604,7 +604,7 @@ Deno.serve(async (req) => {
       }
       candidates = await openFoodFactsBarcode(raw)
       if (!candidates.length) {
-        notice = "No product found in Open Food Facts for this barcode."
+        notice = "No product found for this barcode."
       }
     } else if (mode === "search") {
       const q = (json.query || "").trim()
@@ -671,12 +671,8 @@ Deno.serve(async (req) => {
         if (seen.has(key)) continue
         seen.add(key)
         let batch: FoodCandidate[] = []
-        if (usdaKey) {
-          batch = await usdaSearchToCandidates(term, usdaKey)
-        }
-        if (!batch.length) {
-          batch = await openFoodFactsSearch(term)
-        }
+        if (usdaKey) batch = await usdaSearchToCandidates(term, usdaKey)
+        if (!batch.length) batch = await openFoodFactsSearch(term)
         candidates.push(...batch.slice(0, 2))
       }
       candidates = candidates.slice(0, 12)

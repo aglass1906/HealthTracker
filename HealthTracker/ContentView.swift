@@ -668,6 +668,7 @@ struct ProfileView: View {
     @State private var showingEditProfile = false
     @State private var currentProfile: Profile?
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("syncNutritionToHealthKit") private var syncNutritionToHealthKit = true
     
     var body: some View {
         NavigationStack {
@@ -789,6 +790,16 @@ struct ProfileView: View {
                 } footer: {
                     if healthKitManager.isAuthorized {
                         Text("Import Last 30 Days will fetch historical data. Sync Latest Data will update recent days.")
+                    }
+                }
+
+                Section("Nutrition") {
+                    Toggle(isOn: $syncNutritionToHealthKit) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "fork.knife")
+                                .foregroundStyle(.orange)
+                            Text("Save meals to Apple Health")
+                        }
                     }
                 }
                 
