@@ -478,6 +478,20 @@ struct NutritionLogRowView: View {
         (log.nutrition_log_items?.count ?? 0) > 1
     }
 
+    private var photoPath: String? {
+        guard let path = log.photo_path?.trimmingCharacters(in: .whitespacesAndNewlines), !path.isEmpty else {
+            return nil
+        }
+        return path
+    }
+
+    private var productImageURL: URL? {
+        log.nutrition_log_items?
+            .compactMap(\.image_url)
+            .compactMap { URL(string: $0) }
+            .first
+    }
+
     var body: some View {
         let content = HStack(alignment: .top, spacing: 12) {
             mealThumb
@@ -563,7 +577,7 @@ struct NutritionLogRowView: View {
             }
         }
         .task(id: log.photo_path) {
-            guard let path = log.photo_path, !path.isEmpty else {
+            guard let path = photoPath else {
                 thumbURL = nil
                 return
             }
@@ -584,8 +598,19 @@ struct NutritionLogRowView: View {
                         thumbPlaceholder
                     }
                 }
-            } else if log.photo_path != nil {
+            } else if photoPath != nil {
                 thumbPlaceholder
+            } else if let url = productImageURL {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let img):
+                        img.resizable().scaledToFill()
+                    case .failure, .empty:
+                        thumbPlaceholder
+                    @unknown default:
+                        thumbPlaceholder
+                    }
+                }
             } else {
                 Color.clear.frame(width: 52, height: 52)
             }

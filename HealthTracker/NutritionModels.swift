@@ -56,6 +56,7 @@ struct NutritionLogItemRow: Codable, Identifiable, Hashable {
     var sodium_mg: Double?
     var fdc_id: Int64?
     var external_product_id: String?
+    var image_url: String?
     var nutrients: [String: Double]?
     var combo_name: String?
 
@@ -152,7 +153,7 @@ extension FoodCandidateDTO {
         external_product_id = item.external_product_id
         household_serving_text = nil
         nutrients_extra = nutrientsScaled
-        image_url = nil
+        image_url = item.image_url
         source = nil
     }
 

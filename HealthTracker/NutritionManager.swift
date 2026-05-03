@@ -32,7 +32,7 @@ final class NutritionManager: ObservableObject {
     private var client: SupabaseClient { AuthManager.shared.client }
 
     private static let itemsSelect =
-        "id, log_id, name, brand, serving_amount, serving_unit, grams, quantity, calories, protein_g, carb_g, fat_g, fiber_g, sodium_mg, fdc_id, external_product_id, nutrients, combo_name"
+        "id, log_id, name, brand, serving_amount, serving_unit, grams, quantity, calories, protein_g, carb_g, fat_g, fiber_g, sodium_mg, fdc_id, external_product_id, image_url, nutrients, combo_name"
 
     func loadLogs(from start: Date, to end: Date) async {
         guard let session = AuthManager.shared.session else { return }
@@ -210,6 +210,7 @@ final class NutritionManager: ObservableObject {
             let sodium_mg: Double?
             let fdc_id: Int64?
             let external_product_id: String?
+            let image_url: String?
             let nutrients: [String: Double]?
             let combo_name: String?
         }
@@ -276,6 +277,7 @@ final class NutritionManager: ObservableObject {
                     sodium_mg: c.sodium_mg,
                     fdc_id: c.fdc_id,
                     external_product_id: c.external_product_id,
+                    image_url: c.image_url,
                     nutrients: c.nutrients_extra,
                     combo_name: line.comboName
                 )
