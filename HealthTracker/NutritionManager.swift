@@ -33,6 +33,8 @@ final class NutritionManager: ObservableObject {
 
     private static let itemsSelect =
         "id, log_id, name, brand, serving_amount, serving_unit, grams, quantity, calories, protein_g, carb_g, fat_g, fiber_g, sodium_mg, fdc_id, external_product_id, image_url, nutrients, combo_name"
+    private static let itemsSelectWithoutImageURL =
+        "id, log_id, name, brand, serving_amount, serving_unit, grams, quantity, calories, protein_g, carb_g, fat_g, fiber_g, sodium_mg, fdc_id, external_product_id, nutrients, combo_name"
 
     func loadLogs(from start: Date, to end: Date) async {
         guard let session = AuthManager.shared.session else { return }
@@ -60,9 +62,48 @@ final class NutritionManager: ObservableObject {
             lastLoadedLogsStart = start
             lastLoadedLogsEnd = end
         } catch {
+            if isMissingImageURLColumn(error) {
+                await loadLogsWithoutImageURL(from: start, to: end, userID: uid, startString: startS, endString: endS)
+                return
+            }
             errorMessage = error.localizedDescription
             print("Nutrition load error: \(error)")
         }
+    }
+
+    private func loadLogsWithoutImageURL(
+        from start: Date,
+        to end: Date,
+        userID uid: UUID,
+        startString startS: String,
+        endString endS: String
+    ) async {
+        do {
+            let rows: [NutritionLogRow] = try await client
+                .from("nutrition_logs")
+                .select(
+                    "id, user_id, logged_at, meal_type, source, barcode_raw, photo_path, status, created_at, notes, nutrition_log_items(\(Self.itemsSelectWithoutImageURL))"
+                )
+                .eq("user_id", value: uid)
+                .gte("logged_at", value: startS)
+                .lte("logged_at", value: endS)
+                .order("logged_at", ascending: false)
+                .execute()
+                .value
+            logs = rows
+            lastLoadedLogsStart = start
+            lastLoadedLogsEnd = end
+        } catch {
+            errorMessage = error.localizedDescription
+            print("Nutrition load error: \(error)")
+        }
+    }
+
+    private func isMissingImageURLColumn(_ error: Error) -> Bool {
+        let description = String(describing: error)
+        return description.contains("PGRST204")
+            && description.contains("image_url")
+            && description.contains("nutrition_log_items")
     }
 
     /// Reloads the same calendar day range as the last `loadLogs`, or today if none.
@@ -215,6 +256,26 @@ final class NutritionManager: ObservableObject {
             let combo_name: String?
         }
 
+        struct ItemInsertWithoutImageURL: Encodable {
+            let log_id: UUID
+            let name: String
+            let brand: String?
+            let serving_amount: Double
+            let serving_unit: String
+            let grams: Double?
+            let quantity: Double
+            let calories: Double
+            let protein_g: Double
+            let carb_g: Double
+            let fat_g: Double
+            let fiber_g: Double?
+            let sodium_mg: Double?
+            let fdc_id: Int64?
+            let external_product_id: String?
+            let nutrients: [String: Double]?
+            let combo_name: String?
+        }
+
         let loggedAtStr = isoFormatter.string(from: input.loggedAt)
         let notesTrimmed = input.notes?.trimmingCharacters(in: .whitespacesAndNewlines)
         let notesOut = (notesTrimmed?.isEmpty == false) ? notesTrimmed : nil
@@ -281,10 +342,37 @@ final class NutritionManager: ObservableObject {
                     nutrients: c.nutrients_extra,
                     combo_name: line.comboName
                 )
-                try await client
-                    .from("nutrition_log_items")
-                    .insert(item)
-                    .execute()
+                do {
+                    try await client
+                        .from("nutrition_log_items")
+                        .insert(item)
+                        .execute()
+                } catch {
+                    guard isMissingImageURLColumn(error) else { throw error }
+                    let fallbackItem = ItemInsertWithoutImageURL(
+                        log_id: newLog.id,
+                        name: c.name,
+                        brand: c.brand,
+                        serving_amount: line.perUnitServingAmount,
+                        serving_unit: line.perUnitServingUnit,
+                        grams: c.grams,
+                        quantity: line.quantity,
+                        calories: c.calories,
+                        protein_g: c.protein_g,
+                        carb_g: c.carb_g,
+                        fat_g: c.fat_g,
+                        fiber_g: c.fiber_g,
+                        sodium_mg: c.sodium_mg,
+                        fdc_id: c.fdc_id,
+                        external_product_id: c.external_product_id,
+                        nutrients: c.nutrients_extra,
+                        combo_name: line.comboName
+                    )
+                    try await client
+                        .from("nutrition_log_items")
+                        .insert(fallbackItem)
+                        .execute()
+                }
             }
 
             if syncToHealthKit {
