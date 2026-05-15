@@ -22,6 +22,39 @@ struct SocialEvent: Codable, Identifiable {
     let profile: Profile?
 }
 
+private struct SocialEventDB: Codable {
+    let id: UUID
+    let family_id: UUID
+    let user_id: UUID
+    let type: String
+    let payload: [String: String]?
+    let created_at: String
+}
+
+struct CommunityMorningDigest {
+    let totalEvents: Int
+    let workouts: Int
+    let goals: Int
+    let rings: Int
+    let challengeUpdates: Int
+    let newMembers: Int
+
+    var hasActivity: Bool {
+        totalEvents > 0
+    }
+
+    var leadSentence: String {
+        let updateText = totalEvents == 1 ? "update" : "updates"
+        if workouts > max(goals, max(rings, challengeUpdates)) {
+            return "Workouts led the day, with \(workouts) \(workouts == 1 ? "session" : "sessions") finished."
+        }
+        if challengeUpdates > max(workouts, max(goals, rings)) {
+            return "Challenge activity picked up with \(challengeUpdates) \(challengeUpdates == 1 ? "update" : "updates")."
+        }
+        return "The community logged \(totalEvents) \(updateText) yesterday."
+    }
+}
+
 extension String {
     func dateValue() -> Date {
         let formatter = ISO8601DateFormatter()
@@ -49,6 +82,7 @@ enum FeedFilter: String, CaseIterable, Identifiable {
 
 class SocialFeedViewModel: ObservableObject {
     @Published var events: [SocialEvent] = []
+    @Published var communityDigest: CommunityMorningDigest?
     @Published var isLoading = false
     
     @Published var selectedTimeframe: FeedTimeframe = .last7Days
@@ -85,16 +119,9 @@ class SocialFeedViewModel: ObservableObject {
                 .execute()
                 .value
             
-            // 2. Get events
-            struct EventDB: Codable {
-                let id: UUID
-                let family_id: UUID
-                let user_id: UUID
-                let type: String
-                let payload: [String: String]?
-                let created_at: String
-            }
+            await fetchCommunityDigest(for: familyId)
             
+            // 2. Get events
             var query = client
                 .from("social_events")
                 .select()
@@ -143,7 +170,7 @@ class SocialFeedViewModel: ObservableObject {
             // But if I toggle "Workouts" -> "All", I need "All".
             // So I must fetch "All" for the timeframe, and THEN filter for display.
             
-            let rawEvents: [EventDB] = try await finalQuery.execute().value
+            let rawEvents: [SocialEventDB] = try await finalQuery.execute().value
             
             // 3. Map & Filter Locally
             let allMappedEvents = rawEvents.compactMap { event -> SocialEvent? in
@@ -185,12 +212,57 @@ class SocialFeedViewModel: ObservableObject {
             await challengeVM.fetchActiveChallenges(for: familyId)
         }
     }
+
+    private func fetchCommunityDigest(for familyId: UUID) async {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
+              let tomorrow = calendar.date(byAdding: .day, value: 1, to: yesterday) else {
+            communityDigest = nil
+            return
+        }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        do {
+            let events: [SocialEventDB] = try await client
+                .from("social_events")
+                .select()
+                .eq("family_id", value: familyId)
+                .gte("created_at", value: formatter.string(from: yesterday))
+                .lt("created_at", value: formatter.string(from: tomorrow))
+                .execute()
+                .value
+
+            guard !events.isEmpty else {
+                communityDigest = nil
+                return
+            }
+
+            communityDigest = CommunityMorningDigest(
+                totalEvents: events.count,
+                workouts: events.filter { $0.type == "workout_finished" }.count,
+                goals: events.filter { $0.type == "goal_met" }.count,
+                rings: events.filter { $0.type.starts(with: "ring_closed") }.count,
+                challengeUpdates: events.filter { $0.type.contains("challenge") || $0.type == "round_winner" }.count,
+                newMembers: events.filter { $0.type == "joined_family" }.count
+            )
+        } catch {
+            print("Community digest fetch error: \(error)")
+            communityDigest = nil
+        }
+    }
 }
 
 struct SocialFeedView: View {
     let familyId: UUID
     @StateObject private var viewModel = SocialFeedViewModel()
     @StateObject private var briefingManager = MorningBriefingManager.shared
+
+    private var shouldShowCommunityDigest: Bool {
+        briefingManager.shouldShowBriefing == true && viewModel.communityDigest?.hasActivity == true
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -245,26 +317,13 @@ struct SocialFeedView: View {
             if viewModel.isLoading && viewModel.events.isEmpty {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if viewModel.events.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "newspaper")
-                        .font(.system(size: 60))
-                        .foregroundStyle(.gray.opacity(0.3))
-                    Text("No Activity Found")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
-                    Text("Try changing your filters or checking back later.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if viewModel.events.isEmpty && !shouldShowCommunityDigest {
+                emptyFeedView
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                        if briefingManager.shouldShowBriefing, let data = briefingManager.briefingData {
-                            MorningBriefingView(data: data) {
+                        if shouldShowCommunityDigest, let digest = viewModel.communityDigest {
+                            CommunityMorningSummaryView(digest: digest) {
                                 withAnimation {
                                     briefingManager.dismissBriefing()
                                 }
@@ -272,13 +331,18 @@ struct SocialFeedView: View {
                             .padding(.horizontal)
                             .padding(.bottom, 16)
                         }
-                        
-                        ForEach(viewModel.sections, id: \.date) { section in
-                            Section(header: DateHeaderView(date: section.date)) {
-                                ForEach(section.events) { event in
-                                    SocialFeedItem(event: event)
-                                        .padding(.horizontal)
-                                        .padding(.vertical, 6)
+
+                        if viewModel.events.isEmpty {
+                            emptyFeedView
+                                .frame(minHeight: 300)
+                        } else {
+                            ForEach(viewModel.sections, id: \.date) { section in
+                                Section(header: DateHeaderView(date: section.date)) {
+                                    ForEach(section.events) { event in
+                                        SocialFeedItem(event: event)
+                                            .padding(.horizontal)
+                                            .padding(.vertical, 6)
+                                    }
                                 }
                             }
                         }
@@ -302,7 +366,128 @@ struct SocialFeedView: View {
             Task { await viewModel.fetchFeed(for: familyId) }
         }
     }
+
+    private var emptyFeedView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "newspaper")
+                .font(.system(size: 60))
+                .foregroundStyle(.gray.opacity(0.3))
+            Text("No Activity Found")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            Text("Try changing your filters or checking back later.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
     
+}
+
+struct CommunityMorningSummaryView: View {
+    let digest: CommunityMorningDigest
+    var onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Good morning")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    Text("Here's what happened in the community yesterday")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "person.3.fill")
+                    .font(.title3)
+                    .foregroundStyle(.blue)
+                    .padding(10)
+                    .background(Color.blue.opacity(0.12))
+                    .clipShape(Circle())
+            }
+
+            Text(digest.leadSentence)
+                .font(.body)
+                .foregroundStyle(.primary)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 126), spacing: 10)], spacing: 10) {
+                if digest.workouts > 0 {
+                    CommunityDigestStat(title: "Workouts", value: digest.workouts, icon: "figure.run", color: .orange)
+                }
+                if digest.goals > 0 {
+                    CommunityDigestStat(title: "Goals hit", value: digest.goals, icon: "target", color: .green)
+                }
+                if digest.rings > 0 {
+                    CommunityDigestStat(title: "Rings closed", value: digest.rings, icon: "circle.fill", color: .red)
+                }
+                if digest.challengeUpdates > 0 {
+                    CommunityDigestStat(title: "Challenges", value: digest.challengeUpdates, icon: "flag.checkered", color: .purple)
+                }
+                if digest.newMembers > 0 {
+                    CommunityDigestStat(title: "New members", value: digest.newMembers, icon: "person.badge.plus", color: .blue)
+                }
+            }
+
+            Button {
+                onDismiss()
+            } label: {
+                Text("Got it")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.blue)
+                    .cornerRadius(12)
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color(.systemGray4), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+    }
+}
+
+private struct CommunityDigestStat: View {
+    let title: String
+    let value: Int
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.headline)
+                .foregroundStyle(color)
+                .frame(width: 24, height: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(value)")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .background(color.opacity(0.1))
+        .cornerRadius(10)
+    }
 }
 
 // MARK: - Helpers

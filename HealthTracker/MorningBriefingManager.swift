@@ -13,7 +13,7 @@ class MorningBriefingManager: ObservableObject {
     static let shared = MorningBriefingManager()
     
     @Published var shouldShowPopup = false
-    @Published var shouldShowBriefing = false // This controls the feed item
+    @Published var shouldShowBriefing = false // This controls the community feed item
     @Published var briefingData: DailyHealthData?
     
     // Notification Settings
@@ -100,24 +100,22 @@ class MorningBriefingManager: ObservableObject {
             return
         }
         
-        // 2. Data Check: Get yesterday's data
-        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
-        guard let data = HealthDataStore.shared.getDailyData(for: yesterday) else {
-            // No data yet, wait for sync
-            shouldShowBriefing = false
-            shouldShowPopup = false
-            return
-        }
-        
-        self.briefingData = data
-        
-        // 3. Feed Status Check
+        // 2. Feed Status Check
         if let lastDate = userDefaults.object(forKey: lastBriefedDateKey) as? Date,
            calendar.isDate(lastDate, inSameDayAs: today) {
             shouldShowBriefing = false
         } else {
             shouldShowBriefing = true
         }
+        
+        // 3. Data Check: Get yesterday's data for the personal popup only.
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+        guard let data = HealthDataStore.shared.getDailyData(for: yesterday) else {
+            shouldShowPopup = false
+            return
+        }
+        
+        self.briefingData = data
         
         // 4. Popup Status Check
         if let lastPopupDate = userDefaults.object(forKey: popupShownDateKey) as? Date,
