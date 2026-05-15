@@ -43,6 +43,27 @@ struct CommunitySettingsView: View {
                         }
                     }
                     
+                    Section("More Communities") {
+                        HStack {
+                            TextField("Invite Code", text: $viewModel.joinCode)
+                                .keyboardType(.numberPad)
+                            
+                            Button("Join") {
+                                Task { await viewModel.joinFamily() }
+                            }
+                            .disabled(viewModel.joinCode.count < 6)
+                        }
+                        
+                        HStack {
+                            TextField("Community Name", text: $viewModel.newFamilyName)
+                            
+                            Button("Create") {
+                                Task { await viewModel.createFamily() }
+                            }
+                            .disabled(viewModel.newFamilyName.isEmpty)
+                        }
+                    }
+                    
                     // MARK: - Members
                     Section("Members") {
                         ForEach(viewModel.members) { member in

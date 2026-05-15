@@ -15,6 +15,10 @@ class SocialFeedManager {
     
     private init() {}
     
+    func fetchCurrentUserCommunityIds() async -> [UUID] {
+        await CommunityMembershipManager.shared.fetchCommunityIdsForCurrentUser()
+    }
+    
     // Event Types matches DB check or app convention
     enum EventType: String {
         case joined_family
@@ -107,7 +111,7 @@ class SocialFeedManager {
         let today = Date().formatted(date: .numeric, time: .omitted)
         
         func check(type: String, value: Double, threshold: Double, unit: String, displayValue: String) {
-            let key = "posted_goal_\(type)_\(today)"
+            let key = "posted_goal_\(familyId)_\(type)_\(today)"
 
             // 1. Local Debounce
             if UserDefaults.standard.bool(forKey: key) { return }
@@ -135,13 +139,30 @@ class SocialFeedManager {
         check(type: "Workouts", value: Double(workoutsCount), threshold: 1, unit: "workouts", displayValue: "\(workoutsCount) workouts")
     }
     
+    func checkAndPostGoalToAllCommunities(steps: Int, calories: Int, flights: Int, distance: Double, exerciseMinutes: Int, workoutsCount: Int) {
+        Task {
+            let familyIds = await fetchCurrentUserCommunityIds()
+            for familyId in familyIds {
+                checkAndPostGoal(
+                    steps: steps,
+                    calories: calories,
+                    flights: flights,
+                    distance: distance,
+                    exerciseMinutes: exerciseMinutes,
+                    workoutsCount: workoutsCount,
+                    familyId: familyId
+                )
+            }
+        }
+    }
+    
     // MARK: - Ring Checks
     
     func checkAndPostRings(rings: ActivityRings, familyId: UUID) {
         let today = Date().formatted(date: .numeric, time: .omitted)
         
         func check(ring: RingData, type: EventType, keySuffix: String) {
-            let key = "posted_ring_\(keySuffix)_\(today)"
+            let key = "posted_ring_\(familyId)_\(keySuffix)_\(today)"
             if UserDefaults.standard.bool(forKey: key) { return }
 
             if ring.value >= ring.goal && ring.goal > 0 {
@@ -161,10 +182,19 @@ class SocialFeedManager {
         check(ring: rings.stand, type: .ring_closed_stand, keySuffix: "stand")
     }
     
+    func checkAndPostRingsToAllCommunities(rings: ActivityRings) {
+        Task {
+            let familyIds = await fetchCurrentUserCommunityIds()
+            for familyId in familyIds {
+                checkAndPostRings(rings: rings, familyId: familyId)
+            }
+        }
+    }
+    
     // MARK: - Workout Check
     
     func checkAndPostWorkout(workout: WorkoutData, familyId: UUID) {
-        let key = "posted_workout_\(workout.startDate.timeIntervalSince1970)_\(workout.workoutType)"
+        let key = "posted_workout_\(familyId)_\(workout.startDate.timeIntervalSince1970)_\(workout.workoutType)"
 
         if UserDefaults.standard.bool(forKey: key) { return }
 
@@ -187,6 +217,15 @@ class SocialFeedManager {
 
         Task {
             await post(type: .workout_finished, familyId: familyId, payload: payload)
+        }
+    }
+    
+    func checkAndPostWorkoutToAllCommunities(workout: WorkoutData) {
+        Task {
+            let familyIds = await fetchCurrentUserCommunityIds()
+            for familyId in familyIds {
+                checkAndPostWorkout(workout: workout, familyId: familyId)
+            }
         }
     }
     

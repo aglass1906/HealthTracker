@@ -19,7 +19,8 @@ struct Family: Codable, Identifiable {
 
 @MainActor
 class FamilyViewModel: ObservableObject {
-    @Published var family: Family?
+    @Published var communities: [Family] = []
+    @Published var selectedCommunity: Family?
     @Published var members: [Profile] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -29,13 +30,72 @@ class FamilyViewModel: ObservableObject {
     @Published var joinCode = ""
     
     let client = AuthManager.shared.client
+    private let membershipManager = CommunityMembershipManager.shared
+    
+    var family: Family? {
+        selectedCommunity
+    }
     
     func fetchFamily() async {
         guard let userId = AuthManager.shared.session?.user.id else { return }
         isLoading = true
         
+        defer { isLoading = false }
+        
+        if communities.isEmpty {
+            await membershipManager.backfillLegacyMembershipIfNeeded(userId: userId)
+        }
+        
+        let fetchedCommunities = await membershipManager.fetchCommunitiesForCurrentUser()
+        communities = fetchedCommunities
+        
+        if let selectedCommunity,
+           fetchedCommunities.contains(where: { $0.id == selectedCommunity.id }) {
+            await selectCommunity(selectedCommunity)
+        } else if let firstCommunity = fetchedCommunities.first {
+            await selectCommunity(firstCommunity)
+        } else {
+            selectedCommunity = nil
+            members = []
+        }
+    }
+    
+    func selectCommunity(_ community: Family) async {
+        selectedCommunity = community
+        members = await membershipManager.fetchMembers(for: community.id)
+        
+        Task {
+            await SocialFeedManager.shared.checkAndPostJoin(familyId: community.id)
+        }
+    }
+    
+    func selectCommunity(id: UUID) async {
+        guard let community = communities.first(where: { $0.id == id }) else { return }
+        await selectCommunity(community)
+    }
+    
+    private func refreshAfterMembershipChange(select family: Family? = nil) async {
+        let fetchedCommunities = await membershipManager.fetchCommunitiesForCurrentUser()
+        communities = fetchedCommunities
+        
+        if let family,
+           fetchedCommunities.contains(where: { $0.id == family.id }) {
+            await selectCommunity(family)
+        } else if let current = selectedCommunity,
+                  fetchedCommunities.contains(where: { $0.id == current.id }) {
+            await selectCommunity(current)
+        } else if let first = fetchedCommunities.first {
+            await selectCommunity(first)
+        } else {
+            selectedCommunity = nil
+            members = []
+        }
+    }
+    
+    private func updateLegacyFamilyIdIfEmpty(_ familyId: UUID) async {
+        guard let userId = AuthManager.shared.session?.user.id else { return }
+        
         do {
-            // 1. Get user's profile to find family_id
             let profile: Profile = try await client
                 .from("profiles")
                 .select()
@@ -44,38 +104,20 @@ class FamilyViewModel: ObservableObject {
                 .execute()
                 .value
             
-            if let familyId = profile.family_id {
-                // 2. Fetch Family Details
-                let family: Family = try await client
-                    .from("families")
-                    .select()
-                    .eq("id", value: familyId)
-                    .single()
-                    .execute()
-                    .value
-                
-                self.family = family
-                
-                // Ensure join event is posted (idempotent check)
-                Task {
-                    await SocialFeedManager.shared.checkAndPostJoin(familyId: family.id)
-                }
-                
-                // 3. Fetch Members
-                let members: [Profile] = try await client
-                    .from("profiles")
-                    .select()
-                    .eq("family_id", value: familyId)
-                    .execute()
-                    .value
-                
-                self.members = members
+            guard profile.family_id == nil else { return }
+            
+            struct ProfileUpdate: Encodable {
+                let family_id: UUID
             }
+            
+            try await client
+                .from("profiles")
+                .update(ProfileUpdate(family_id: familyId))
+                .eq("id", value: userId)
+                .execute()
         } catch {
-            print("Error fetching family: \(error)")
+            print("Legacy family_id update error: \(error)")
         }
-        
-        isLoading = false
     }
     
     func createFamily() async {
@@ -100,18 +142,12 @@ class FamilyViewModel: ObservableObject {
                 .execute()
                 .value
             
-            // 2. Update User Profile
-            struct ProfileUpdate: Encodable {
-                let family_id: UUID
-            }
+            // 2. Add creator membership
+            try await membershipManager.addCurrentUser(to: family.id)
+            await updateLegacyFamilyIdIfEmpty(family.id)
             
-            try await client
-                .from("profiles")
-                .update(ProfileUpdate(family_id: family.id))
-                .eq("id", value: userId)
-                .execute()
-            
-            await fetchFamily()
+            newFamilyName = ""
+            await refreshAfterMembershipChange(select: family)
         } catch {
             errorMessage = "Failed to create family: \(error.localizedDescription)"
         }
@@ -134,19 +170,11 @@ class FamilyViewModel: ObservableObject {
                 .value
             
             // 2. Join
-            struct ProfileUpdate: Encodable {
-                let family_id: UUID
-            }
+            try await membershipManager.addCurrentUser(to: family.id)
+            await updateLegacyFamilyIdIfEmpty(family.id)
             
-            try await client
-                .from("profiles")
-                .update(ProfileUpdate(family_id: family.id))
-                .eq("id", value: userId)
-                .execute()
-            
-
-            
-            await fetchFamily()
+            joinCode = ""
+            await refreshAfterMembershipChange(select: family)
             
             // Post to Feed
             Task {
@@ -161,21 +189,12 @@ class FamilyViewModel: ObservableObject {
     
     func leaveFamily() async {
         guard let userId = AuthManager.shared.session?.user.id else { return }
+        guard let familyId = selectedCommunity?.id else { return }
         isLoading = true
         
         do {
-            struct ProfileUpdate: Encodable {
-                let family_id: UUID? = nil
-            }
-            
-            try await client
-                .from("profiles")
-                .update(ProfileUpdate())
-                .eq("id", value: userId)
-                .execute()
-            
-            family = nil
-            members = []
+            try await membershipManager.removeCurrentUser(from: familyId)
+            await refreshAfterMembershipChange()
         } catch {
             errorMessage = "Failed to leave family."
         }
@@ -197,6 +216,22 @@ struct CommunityView: View {
                 } else if let family = viewModel.family {
                     // Active Community View
                     VStack(spacing: 0) {
+                        if viewModel.communities.count > 1 {
+                            Picker("Community", selection: Binding(
+                                get: { viewModel.selectedCommunity?.id ?? family.id },
+                                set: { newValue in
+                                    Task { await viewModel.selectCommunity(id: newValue) }
+                                }
+                            )) {
+                                ForEach(viewModel.communities) { community in
+                                    Text(community.name).tag(community.id)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .padding(.horizontal)
+                            .padding(.top)
+                        }
+                        
                         Picker("View", selection: $communityTab) {
                             Text("Feed").tag(0)
                             Text("Leaderboard").tag(1)

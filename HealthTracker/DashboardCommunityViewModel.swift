@@ -33,25 +33,14 @@ class DashboardCommunityViewModel: ObservableObject {
     // MARK: - Recent Events
     
     private func fetchRecentEvents() async {
-        // We need to know the familyId. 
-        // For now, let's assume the user's primary family from their profile.
-        guard let userId = AuthManager.shared.session?.user.id else { return }
+        let familyIds = await CommunityMembershipManager.shared.fetchCommunityIdsForCurrentUser()
+        guard !familyIds.isEmpty else { return }
         
         do {
-            let profile: Profile = try await client
-                .from("profiles")
-                .select()
-                .eq("id", value: userId)
-                .single()
-                .execute()
-                .value
-            
-            guard let familyId = profile.family_id else { return }
-            
             let events: [SocialEvent] = try await client
                 .from("social_events")
                 .select("*, profile:profiles(*)")
-                .eq("family_id", value: familyId)
+                .in("family_id", values: familyIds)
                 .order("created_at", ascending: false)
                 .limit(3)
                 .execute()
@@ -66,25 +55,15 @@ class DashboardCommunityViewModel: ObservableObject {
     // MARK: - Active Challenge
     
     private func fetchActiveChallenge() async {
-        guard let userId = AuthManager.shared.session?.user.id else { return }
+        let familyIds = await CommunityMembershipManager.shared.fetchCommunityIdsForCurrentUser()
+        guard !familyIds.isEmpty else { return }
         
         do {
-            // Get family ID (duplicated effort, maybe store common profile?)
-             let profile: Profile = try await client
-                .from("profiles")
-                .select()
-                .eq("id", value: userId)
-                .single()
-                .execute()
-                .value
-            
-             guard let familyId = profile.family_id else { return }
-            
-            // Fetch one active challenge
+            // Fetch one active challenge across all communities
              let challenges: [Challenge] = try await client
                  .from("challenges")
                  .select()
-                 .eq("family_id", value: familyId)
+                 .in("family_id", values: familyIds)
                  .gt("end_date", value: ISO8601DateFormatter().string(from: Date())) 
                  .order("end_date", ascending: true) // Ending soonest
                  .limit(1)
@@ -131,7 +110,8 @@ class DashboardCommunityViewModel: ObservableObject {
     // MARK: - Yesterday's Champions
     
     private func fetchYesterdayChampions() async {
-         guard let userId = AuthManager.shared.session?.user.id else { return }
+        let familyIds = await CommunityMembershipManager.shared.fetchCommunityIdsForCurrentUser()
+        guard !familyIds.isEmpty else { return }
         
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
         let formatter = DateFormatter()
@@ -139,25 +119,30 @@ class DashboardCommunityViewModel: ObservableObject {
         let dateString = formatter.string(from: yesterday)
         
         do {
-             let profile: Profile = try await client
-                .from("profiles")
-                .select()
-                .eq("id", value: userId)
-                .single()
-                .execute()
-                .value
+            // Get all unique profiles across the user's communities
+            let profileGroups = await withTaskGroup(of: [Profile].self) { group in
+                for familyId in familyIds {
+                    group.addTask {
+                        await CommunityMembershipManager.shared.fetchMembers(for: familyId)
+                    }
+                }
+                
+                var groupedProfiles: [[Profile]] = []
+                for await profiles in group {
+                    groupedProfiles.append(profiles)
+                }
+                return groupedProfiles
+            }
             
-             guard let familyId = profile.family_id else { return }
+            var profilesById: [UUID: Profile] = [:]
+            for profile in profileGroups.flatMap({ $0 }) {
+                profilesById[profile.id] = profile
+            }
             
-            // Get all profiles in family
-            let profiles: [Profile] = try await client
-                .from("profiles")
-                .select()
-                .eq("family_id", value: familyId)
-                .execute()
-                .value
+            let profiles = Array(profilesById.values)
             
             let userIds = profiles.map { $0.id }
+            guard !userIds.isEmpty else { return }
             
             // Fetch stats for all users for yesterday
              struct DailyStat: Codable {

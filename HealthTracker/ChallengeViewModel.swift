@@ -315,13 +315,8 @@ class ChallengeViewModel: ObservableObject {
         creatorName = nil
         
         do {
-            // 1. Get family profiles
-            let profiles: [Profile] = try await client
-                .from("profiles")
-                .select()
-                .eq("family_id", value: challenge.family_id)
-                .execute()
-                .value
+            // 1. Get community profiles
+            let profiles = await CommunityMembershipManager.shared.fetchMembers(for: challenge.family_id)
             
             // Set Creator Name
             if let creator = profiles.first(where: { $0.id == challenge.creator_id }) {
@@ -665,13 +660,8 @@ class ChallengeViewModel: ObservableObject {
         guard challenge.roundDuration != nil else { return [] }
         
         do {
-            // 1. Get profiles
-            let profiles: [Profile] = try await client
-                .from("profiles")
-                .select()
-                .eq("family_id", value: challenge.family_id)
-                .execute()
-                .value
+            // 1. Get community profiles
+            let profiles = await CommunityMembershipManager.shared.fetchMembers(for: challenge.family_id)
             
             let userIds = profiles.map { $0.id }
             
@@ -916,12 +906,7 @@ class ChallengeViewModel: ObservableObject {
         
         do {
             // Get all participants
-            let profiles: [Profile] = try await client
-                .from("profiles")
-                .select()
-                .eq("family_id", value: challenge.family_id)
-                .execute()
-                .value
+            let profiles = await CommunityMembershipManager.shared.fetchMembers(for: challenge.family_id)
             
             var winnerName = "Someone"
             var winMetric = ""

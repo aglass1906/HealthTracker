@@ -67,13 +67,8 @@ class LeaderboardViewModel: ObservableObject {
         let today = formatter.string(from: selectedDate)
         
         do {
-            // 1. Get all profiles in family to map names
-            let profiles: [Profile] = try await client
-                .from("profiles")
-                .select()
-                .eq("family_id", value: familyId)
-                .execute()
-                .value
+            // 1. Get all community members to map names
+            let profiles = await CommunityMembershipManager.shared.fetchMembers(for: familyId)
             
             // 2. Get today's stats for these users
             let userIds = profiles.map { $0.id }

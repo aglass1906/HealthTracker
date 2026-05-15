@@ -61,9 +61,10 @@ class SyncManager {
                 .execute()
             print("Successfully synced data for \(dateString)")
             
-            // Post "Goal Met" to feed if applicable
-            if let profile = await authManager.fetchCurrentUserProfile(), let familyId = profile.family_id {
-                 SocialFeedManager.shared.checkAndPostGoal(
+            // Post "Goal Met" to every community the user belongs to.
+            let familyIds = await SocialFeedManager.shared.fetchCurrentUserCommunityIds()
+            for familyId in familyIds {
+                SocialFeedManager.shared.checkAndPostGoal(
                     steps: Int(data.steps),
                     calories: Int(data.calories),
                     flights: Int(data.flights),
@@ -71,10 +72,10 @@ class SyncManager {
                     exerciseMinutes: totalMinutes,
                     workoutsCount: data.workouts.count,
                     familyId: familyId
-                 )
+                )
                  
-                 // Also could post checkAndPostWorkout loop here, but SyncManager calls syncWorkouts separately typically.
-                 // We will stick to the existing separate syncWorkouts calls.
+                // Also could post checkAndPostWorkout loop here, but SyncManager calls syncWorkouts separately typically.
+                // We will stick to the existing separate syncWorkouts calls.
             }
             
         } catch {
@@ -120,7 +121,8 @@ class SyncManager {
     func syncWorkouts(workouts: [WorkoutData]) async {
         guard !workouts.isEmpty else { return }
 
-        if let profile = await authManager.fetchCurrentUserProfile(), let familyId = profile.family_id {
+        let familyIds = await SocialFeedManager.shared.fetchCurrentUserCommunityIds()
+        for familyId in familyIds {
             for workout in workouts {
                 SocialFeedManager.shared.checkAndPostWorkout(workout: workout, familyId: familyId)
             }
@@ -128,7 +130,8 @@ class SyncManager {
     }
 
     func syncRings(rings: ActivityRings) async {
-        if let profile = await authManager.fetchCurrentUserProfile(), let familyId = profile.family_id {
+        let familyIds = await SocialFeedManager.shared.fetchCurrentUserCommunityIds()
+        for familyId in familyIds {
             SocialFeedManager.shared.checkAndPostRings(rings: rings, familyId: familyId)
         }
     }
@@ -170,30 +173,32 @@ class SyncManager {
             print("❌ syncAll: failed to upload stats: \(error)")
         }
 
-        // 2. Fetch profile once for all feed posts
-        guard let profile = await authManager.fetchCurrentUserProfile(),
-              let familyId = profile.family_id else {
-            print("syncAll: no profile/family, skipping feed posts")
+        // 2. Fetch communities once for all feed posts
+        let familyIds = await SocialFeedManager.shared.fetchCurrentUserCommunityIds()
+        guard !familyIds.isEmpty else {
+            print("syncAll: no communities, skipping feed posts")
             return
         }
 
         // 3. Goal check
-        SocialFeedManager.shared.checkAndPostGoal(
-            steps: Int(data.steps),
-            calories: Int(data.calories),
-            flights: Int(data.flights),
-            distance: data.distance ?? 0.0,
-            exerciseMinutes: totalMinutes,
-            workoutsCount: data.workouts.count,
-            familyId: familyId
-        )
+        for familyId in familyIds {
+            SocialFeedManager.shared.checkAndPostGoal(
+                steps: Int(data.steps),
+                calories: Int(data.calories),
+                flights: Int(data.flights),
+                distance: data.distance ?? 0.0,
+                exerciseMinutes: totalMinutes,
+                workoutsCount: data.workouts.count,
+                familyId: familyId
+            )
 
-        // 4. Workouts
-        for workout in workouts {
-            SocialFeedManager.shared.checkAndPostWorkout(workout: workout, familyId: familyId)
+            // 4. Workouts
+            for workout in workouts {
+                SocialFeedManager.shared.checkAndPostWorkout(workout: workout, familyId: familyId)
+            }
+
+            // 5. Rings
+            SocialFeedManager.shared.checkAndPostRings(rings: rings, familyId: familyId)
         }
-
-        // 5. Rings
-        SocialFeedManager.shared.checkAndPostRings(rings: rings, familyId: familyId)
     }
 }

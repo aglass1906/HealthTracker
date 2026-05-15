@@ -111,13 +111,8 @@ class SocialFeedViewModel: ObservableObject {
         isLoading = true
         
         do {
-            // 1. Get profiles for mapping
-            let profiles: [Profile] = try await client
-                .from("profiles")
-                .select()
-                .eq("family_id", value: familyId)
-                .execute()
-                .value
+            // 1. Get community members for mapping
+            let profiles = await CommunityMembershipManager.shared.fetchMembers(for: familyId)
             
             await fetchCommunityDigest(for: familyId)
             
