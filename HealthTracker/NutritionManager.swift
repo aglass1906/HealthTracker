@@ -13,6 +13,7 @@ final class NutritionManager: ObservableObject {
     static let shared = NutritionManager()
 
     @Published private(set) var logs: [NutritionLogRow] = []
+    @Published private(set) var activeGoal: NutritionGoal?
     @Published var isLoading = false
     @Published var errorMessage: String?
 
@@ -31,6 +32,8 @@ final class NutritionManager: ObservableObject {
 
     private var client: SupabaseClient { AuthManager.shared.client }
 
+    private static let goalSelect =
+        "id, user_id, goal_type, daily_calories, protein_g, carb_g, fat_g, sugar_g, sodium_mg, fiber_g, is_active"
     private static let itemsSelect =
         "id, log_id, name, brand, serving_amount, serving_unit, grams, quantity, calories, protein_g, carb_g, fat_g, fiber_g, sodium_mg, fdc_id, external_product_id, image_url, nutrients, combo_name"
     private static let itemsSelectWithoutImageURL =
@@ -69,6 +72,193 @@ final class NutritionManager: ObservableObject {
             errorMessage = error.localizedDescription
             print("Nutrition load error: \(error)")
         }
+    }
+
+    func loadActiveGoal() async {
+        guard let session = AuthManager.shared.session else {
+            activeGoal = nil
+            return
+        }
+
+        errorMessage = nil
+
+        do {
+            let rows: [NutritionGoal] = try await client
+                .from("nutrition_goals")
+                .select(Self.goalSelect)
+                .eq("user_id", value: session.user.id)
+                .eq("is_active", value: true)
+                .limit(1)
+                .execute()
+                .value
+            activeGoal = rows.first
+        } catch {
+            errorMessage = error.localizedDescription
+            print("Nutrition goal load error: \(error)")
+        }
+    }
+
+    func saveGoal(_ goal: NutritionGoal) async -> Bool {
+        guard let session = AuthManager.shared.session else {
+            errorMessage = "Not signed in"
+            return false
+        }
+
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        struct ActiveGoalPatch: Encodable {
+            let is_active: Bool
+        }
+
+        struct GoalUpsert: Encodable {
+            let id: UUID
+            let user_id: UUID
+            let goal_type: NutritionGoalType
+            let daily_calories: Double
+            let protein_g: Double
+            let carb_g: Double
+            let fat_g: Double
+            let sugar_g: Double
+            let sodium_mg: Double
+            let fiber_g: Double?
+            let is_active: Bool
+        }
+
+        let uid = session.user.id
+        let payload = GoalUpsert(
+            id: goal.id,
+            user_id: uid,
+            goal_type: goal.goal_type,
+            daily_calories: goal.daily_calories,
+            protein_g: goal.protein_g,
+            carb_g: goal.carb_g,
+            fat_g: goal.fat_g,
+            sugar_g: goal.sugar_g,
+            sodium_mg: goal.sodium_mg,
+            fiber_g: goal.fiber_g,
+            is_active: true
+        )
+
+        do {
+            try await client
+                .from("nutrition_goals")
+                .update(ActiveGoalPatch(is_active: false))
+                .eq("user_id", value: uid)
+                .eq("is_active", value: true)
+                .execute()
+
+            let saved: NutritionGoal = try await client
+                .from("nutrition_goals")
+                .upsert(payload, onConflict: "id")
+                .select(Self.goalSelect)
+                .single()
+                .execute()
+                .value
+
+            activeGoal = saved
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            print("Nutrition goal save error: \(error)")
+            return false
+        }
+    }
+
+    func dailyTotals(for date: Date) async -> NutritionDayTotals {
+        guard let session = AuthManager.shared.session else {
+            return NutritionDayTotals()
+        }
+
+        struct DailyTotalsLogRow: Decodable {
+            let nutrition_log_items: [DailyTotalsItemRow]?
+        }
+
+        struct DailyTotalsItemRow: Decodable {
+            let calories: Double
+            let protein_g: Double
+            let carb_g: Double
+            let fat_g: Double
+            let sodium_mg: Double?
+            let nutrients: [String: Double]?
+        }
+
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: date)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
+        let startString = isoFormatter.string(from: start)
+        let endString = isoFormatter.string(from: end)
+
+        do {
+            let rows: [DailyTotalsLogRow] = try await client
+                .from("nutrition_logs")
+                .select(
+                    "nutrition_log_items(calories, protein_g, carb_g, fat_g, sodium_mg, nutrients)"
+                )
+                .eq("user_id", value: session.user.id)
+                .eq("status", value: "confirmed")
+                .gte("logged_at", value: startString)
+                .lt("logged_at", value: endString)
+                .execute()
+                .value
+
+            return rows.reduce(into: NutritionDayTotals()) { totals, log in
+                for item in log.nutrition_log_items ?? [] {
+                    totals.calories += item.calories
+                    totals.protein_g += item.protein_g
+                    totals.carb_g += item.carb_g
+                    totals.fat_g += item.fat_g
+                    totals.sugar_g += NutritionLogItemRow.sugarGrams(from: item.nutrients)
+                    totals.sodium_mg += item.sodium_mg ?? 0
+                }
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            print("Nutrition daily totals error: \(error)")
+            return NutritionDayTotals()
+        }
+    }
+
+    func progress(for totals: NutritionDayTotals, goal: NutritionGoal) -> [NutritionProgressItem] {
+        [
+            NutritionProgressItem(
+                kind: .calories,
+                current: totals.calories,
+                target: goal.daily_calories,
+                unit: "kcal"
+            ),
+            NutritionProgressItem(
+                kind: .protein,
+                current: totals.protein_g,
+                target: goal.protein_g,
+                unit: "g"
+            ),
+            NutritionProgressItem(
+                kind: .carbs,
+                current: totals.carb_g,
+                target: goal.carb_g,
+                unit: "g"
+            ),
+            NutritionProgressItem(
+                kind: .fat,
+                current: totals.fat_g,
+                target: goal.fat_g,
+                unit: "g"
+            ),
+            NutritionProgressItem(
+                kind: .sugar,
+                current: totals.sugar_g,
+                target: goal.sugar_g,
+                unit: "g"
+            ),
+            NutritionProgressItem(
+                kind: .sodium,
+                current: totals.sodium_mg,
+                target: goal.sodium_mg,
+                unit: "mg"
+            )
+        ]
     }
 
     private func loadLogsWithoutImageURL(
@@ -661,19 +851,33 @@ final class NutritionManager: ObservableObject {
     }
 
     /// Totals for the currently loaded logs (one calendar day when using the Nutrition tab day picker).
-    var loadedDayTotals: (calories: Double, protein: Double, carbs: Double, fat: Double, sugar: Double) {
-        var cal = 0.0, p = 0.0, c = 0.0, f = 0.0, s = 0.0
+    var loadedDayNutritionTotals: NutritionDayTotals {
+        var totals = NutritionDayTotals()
         for log in logs {
             guard log.status == "confirmed" else { continue }
             for item in log.nutrition_log_items ?? [] {
-                cal += item.calories
-                p += item.protein_g
-                c += item.carb_g
-                f += item.fat_g
-                s += item.sugarGramsFromNutrients
+                totals.calories += item.calories
+                totals.protein_g += item.protein_g
+                totals.carb_g += item.carb_g
+                totals.fat_g += item.fat_g
+                totals.sugar_g += item.sugarGramsFromNutrients
+                totals.sodium_mg += item.sodium_mg ?? 0
             }
         }
-        return (cal, p, c, f, s)
+        return totals
+    }
+
+    /// Legacy tuple used by the current Nutrition summary UI.
+    var loadedDayTotals: (calories: Double, protein: Double, carbs: Double, fat: Double, sugar: Double, sodium: Double) {
+        let totals = loadedDayNutritionTotals
+        return (
+            totals.calories,
+            totals.protein_g,
+            totals.carb_g,
+            totals.fat_g,
+            totals.sugar_g,
+            totals.sodium_mg
+        )
     }
 
     /// Percent of calories from each macro (4/4/9 kcal per gram). Nil components when calories are zero.

@@ -176,8 +176,12 @@ struct DashboardView: View {
                         myDataReferenceDate: $myDataReferenceDate
                     )
                         .padding(.horizontal)
+
+                    // 2. Compact Nutrition Card (Links to Nutrition)
+                    MiniNutritionCard(selectedTab: $selectedTab)
+                        .padding(.horizontal)
                     
-                    // 2. Active Challenge Card
+                    // 3. Active Challenge Card
                     if let challenge = communityViewModel.activeChallenge {
                         ActiveChallengeCard(
                             challenge: challenge,
@@ -187,7 +191,7 @@ struct DashboardView: View {
                             .padding(.horizontal)
                     }
                     
-                    // 3. Yesterday's Champions
+                    // 4. Yesterday's Champions
                     YesterdayChampionsCard(
                         stepChampion: communityViewModel.stepChampion,
                         flightChampion: communityViewModel.flightChampion,
@@ -195,7 +199,7 @@ struct DashboardView: View {
                     )
                     .padding(.horizontal)
                     
-                    // 4. Feed Updates
+                    // 5. Feed Updates
                     FeedSummaryCard(
                         events: communityViewModel.recentEvents,
                         selectedTab: $selectedTab,

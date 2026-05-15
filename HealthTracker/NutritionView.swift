@@ -7,6 +7,7 @@ import SwiftUI
 import PhotosUI
 import AVFoundation
 import UIKit
+import Supabase
 #if canImport(VisionKit)
 import Vision
 import VisionKit
@@ -306,6 +307,7 @@ struct NutritionView: View {
     @State private var selectedDate = Date()
     @State private var showingLogSheet = false
     @State private var showingManageFavorites = false
+    @State private var showingGoalSettings = false
     @State private var editingLog: NutritionLogRow?
     @State private var editingLineItem: LineItemEditTarget?
 
@@ -365,6 +367,7 @@ struct NutritionView: View {
                                 macroChip("C", value: Int(t.carbs.rounded()), unit: "g")
                                 macroChip("F", value: Int(t.fat.rounded()), unit: "g")
                                 macroChip("Sugar", value: Int(t.sugar.rounded()), unit: "g")
+                                macroChip("Sodium", value: Int(t.sodium.rounded()), unit: "mg")
                             }
                         }
                         if let pp = pct.protein, let pc = pct.carbs, let pf = pct.fat {
@@ -378,6 +381,73 @@ struct NutritionView: View {
                         }
                     }
                     .padding(.vertical, 4)
+                }
+
+                Section("Daily Goal") {
+                    Button {
+                        showingGoalSettings = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "target")
+                                .font(.title3)
+                                .foregroundStyle(.green)
+                                .frame(width: 32, height: 32)
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                if let goal = nutritionManager.activeGoal {
+                                    Text(goal.goal_type.displayName)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    Text("\(Int(goal.daily_calories.rounded())) kcal · P \(Int(goal.protein_g.rounded()))g · C \(Int(goal.carb_g.rounded()))g · F \(Int(goal.fat_g.rounded()))g")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text("Target · P \(macroTargetPercent(goal.protein_g, caloriesPerGram: 4, dailyCalories: goal.daily_calories)) · C \(macroTargetPercent(goal.carb_g, caloriesPerGram: 4, dailyCalories: goal.daily_calories)) · F \(macroTargetPercent(goal.fat_g, caloriesPerGram: 9, dailyCalories: goal.daily_calories))")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                    Text("Sugar \(Int(goal.sugar_g.rounded()))g · Sodium \(Int(goal.sodium_mg.rounded()))mg")
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                } else {
+                                    Text("Set a nutrition goal")
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    Text("Choose a preset or enter custom daily targets.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Section("Goal Progress") {
+                    if let goal = nutritionManager.activeGoal {
+                        let totals = nutritionManager.loadedDayNutritionTotals
+                        let progressItems = nutritionManager.progress(for: totals, goal: goal)
+
+                        if nutritionManager.logs.isEmpty {
+                            Text("No meals logged for this day yet.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        ForEach(progressItems) { item in
+                            NutritionProgressRow(item: item)
+                        }
+                    } else {
+                        Button {
+                            showingGoalSettings = true
+                        } label: {
+                            Label("Set a goal to track daily progress", systemImage: "target")
+                        }
+                    }
                 }
 
                 Section("Meals") {
@@ -415,6 +485,12 @@ struct NutritionView: View {
                                 .font(.subheadline)
                         }
                         Button {
+                            showingGoalSettings = true
+                        } label: {
+                            Image(systemName: "target")
+                        }
+                        .accessibilityLabel("Nutrition goal")
+                        Button {
                             showingLogSheet = true
                         } label: {
                             Image(systemName: "plus.circle.fill")
@@ -425,6 +501,9 @@ struct NutritionView: View {
             }
             .sheet(isPresented: $showingManageFavorites) {
                 ManageNutritionFavoritesSheet()
+            }
+            .sheet(isPresented: $showingGoalSettings) {
+                NutritionGoalSettingsSheet(currentGoal: nutritionManager.activeGoal)
             }
             .sheet(isPresented: $showingLogSheet) {
                 LogFoodSheet(syncToHealthKit: syncNutritionToHealthKit, initialDate: selectedDate)
@@ -443,9 +522,11 @@ struct NutritionView: View {
                 EditNutritionLineItemSheet(log: target.log, item: target.item)
             }
             .task(id: selectedDayStart) {
+                await nutritionManager.loadActiveGoal()
                 await nutritionManager.loadLogs(from: selectedDayStart, to: selectedDayEnd)
             }
             .refreshable {
+                await nutritionManager.loadActiveGoal()
                 await nutritionManager.loadLogs(from: selectedDayStart, to: selectedDayEnd)
             }
         }
@@ -464,6 +545,236 @@ struct NutritionView: View {
                 .foregroundStyle(.tertiary)
         }
         .frame(minWidth: 52)
+    }
+
+    private func percentUsed(_ current: Double, _ target: Double) -> String {
+        guard target > 0 else { return "--" }
+        return "\(Int((100 * current / target).rounded()))%"
+    }
+
+    private func macroTargetPercent(_ grams: Double, caloriesPerGram: Double, dailyCalories: Double) -> String {
+        guard dailyCalories > 0 else { return "--" }
+        let percent = max(grams, 0) * caloriesPerGram / dailyCalories * 100
+        return "\(Int(percent.rounded()))%"
+    }
+}
+
+private struct NutritionProgressRow: View {
+    let item: NutritionProgressItem
+
+    private var tint: Color {
+        if item.isOverTarget { return .red }
+        if item.kind.isLimitOriented && item.progress >= 0.85 { return .orange }
+
+        switch item.kind {
+        case .calories: return .orange
+        case .protein: return .blue
+        case .carbs: return .green
+        case .fat: return .purple
+        case .sugar: return .pink
+        case .sodium: return .teal
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(item.kind.displayName)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Spacer()
+                Text(item.target > 0 ? valueText : "\(formatted(item.current)) \(item.unit)")
+                    .font(.caption)
+                    .foregroundStyle(item.isOverTarget ? .red : .secondary)
+            }
+
+            if item.target > 0 {
+                ProgressView(value: item.clampedProgress)
+                    .tint(tint)
+            } else {
+                Text("No target set")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            if item.isOverTarget {
+                Text("Over by \(formatted(item.current - item.target)) \(item.unit)")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+            }
+        }
+        .padding(.vertical, 3)
+    }
+
+    private var valueText: String {
+        let current = formatted(item.current)
+        let target = formatted(item.target)
+        return "\(current) / \(target) \(item.unit)"
+    }
+
+    private func formatted(_ value: Double) -> String {
+        if value >= 100 {
+            return String(format: "%.0f", value)
+        }
+        if abs(value.rounded() - value) < 0.05 {
+            return String(format: "%.0f", value)
+        }
+        return String(format: "%.1f", value)
+    }
+}
+
+private struct NutritionGoalSettingsSheet: View {
+    let currentGoal: NutritionGoal?
+
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var nutritionManager = NutritionManager.shared
+    @State private var goalType: NutritionGoalType
+    @State private var dailyCalories: Double
+    @State private var proteinG: Double
+    @State private var carbG: Double
+    @State private var fatG: Double
+    @State private var sugarG: Double
+    @State private var sodiumMg: Double
+    @State private var fiberG: Double
+    @State private var isSaving = false
+
+    init(currentGoal: NutritionGoal?) {
+        self.currentGoal = currentGoal
+        let fallback = NutritionGoalPreset.values(for: .balanced)
+        _goalType = State(initialValue: currentGoal?.goal_type ?? .balanced)
+        _dailyCalories = State(initialValue: currentGoal?.daily_calories ?? fallback.dailyCalories)
+        _proteinG = State(initialValue: currentGoal?.protein_g ?? fallback.proteinG)
+        _carbG = State(initialValue: currentGoal?.carb_g ?? fallback.carbG)
+        _fatG = State(initialValue: currentGoal?.fat_g ?? fallback.fatG)
+        _sugarG = State(initialValue: currentGoal?.sugar_g ?? fallback.sugarG)
+        _sodiumMg = State(initialValue: currentGoal?.sodium_mg ?? fallback.sodiumMg)
+        _fiberG = State(initialValue: currentGoal?.fiber_g ?? fallback.fiberG ?? 0)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Preset") {
+                    Picker("Goal", selection: $goalType) {
+                        ForEach(NutritionGoalType.allCases) { type in
+                            Text(type.displayName).tag(type)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: goalType) { _, newValue in
+                        applyPreset(newValue)
+                    }
+                }
+
+                Section("Daily targets") {
+                    numericTargetRow("Calories", value: $dailyCalories, unit: "kcal")
+                    numericTargetRow("Protein", value: $proteinG, unit: "g", caloriesPerUnit: 4)
+                    numericTargetRow("Carbs", value: $carbG, unit: "g", caloriesPerUnit: 4)
+                    numericTargetRow("Fat", value: $fatG, unit: "g", caloriesPerUnit: 9)
+                    numericTargetRow("Sugar", value: $sugarG, unit: "g", caloriesPerUnit: 4)
+                    numericTargetRow("Sodium", value: $sodiumMg, unit: "mg")
+                    numericTargetRow("Fiber", value: $fiberG, unit: "g", caloriesPerUnit: 2)
+                }
+
+                Section {
+                    LabeledContent("Salt equivalent", value: String(format: "%.1f g", sodiumMg * 2.5 / 1000))
+                    Text("Sodium is stored in milligrams. Salt equivalent is shown for reference.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let message = nutritionManager.errorMessage, !message.isEmpty {
+                    Section {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("Nutrition Goal")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task { await save() }
+                    }
+                    .disabled(isSaving || AuthManager.shared.session == nil)
+                }
+            }
+        }
+    }
+
+    private func numericTargetRow(
+        _ title: String,
+        value: Binding<Double>,
+        unit: String,
+        caloriesPerUnit: Double? = nil
+    ) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            TextField(title, value: value, format: .number.precision(.fractionLength(0 ... 1)))
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 96)
+            Text(unit)
+                .foregroundStyle(.secondary)
+                .frame(width: 36, alignment: .leading)
+            if let caloriesPerUnit {
+                Text(percentOfCalories(value.wrappedValue, caloriesPerUnit: caloriesPerUnit))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(width: 48, alignment: .trailing)
+            } else {
+                Spacer()
+                    .frame(width: 48)
+            }
+        }
+    }
+
+    private func percentOfCalories(_ value: Double, caloriesPerUnit: Double) -> String {
+        guard dailyCalories > 0 else { return "0%" }
+        let percent = (max(value, 0) * caloriesPerUnit / dailyCalories) * 100
+        return "\(Int(percent.rounded()))%"
+    }
+
+    private func applyPreset(_ type: NutritionGoalType) {
+        let values = NutritionGoalPreset.values(for: type)
+        dailyCalories = values.dailyCalories
+        proteinG = values.proteinG
+        carbG = values.carbG
+        fatG = values.fatG
+        sugarG = values.sugarG
+        sodiumMg = values.sodiumMg
+        fiberG = values.fiberG ?? 0
+    }
+
+    private func save() async {
+        guard let userId = AuthManager.shared.session?.user.id else { return }
+        isSaving = true
+        defer { isSaving = false }
+
+        let goal = NutritionGoal(
+            id: currentGoal?.id ?? UUID(),
+            user_id: userId,
+            goal_type: goalType,
+            daily_calories: max(dailyCalories, 0),
+            protein_g: max(proteinG, 0),
+            carb_g: max(carbG, 0),
+            fat_g: max(fatG, 0),
+            sugar_g: max(sugarG, 0),
+            sodium_mg: max(sodiumMg, 0),
+            fiber_g: fiberG > 0 ? fiberG : nil,
+            is_active: true
+        )
+
+        if await nutritionManager.saveGoal(goal) {
+            dismiss()
+        }
     }
 }
 

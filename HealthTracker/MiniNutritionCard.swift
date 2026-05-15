@@ -1,0 +1,180 @@
+import SwiftUI
+
+struct MiniNutritionCard: View {
+    @ObservedObject var nutritionManager = NutritionManager.shared
+    @Binding var selectedTab: Int
+    @State private var totals = NutritionDayTotals()
+    @State private var isLoading = false
+
+    var body: some View {
+        Button {
+            selectedTab = 3
+        } label: {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 16) {
+                    Image(systemName: "leaf.circle.fill")
+                        .font(.system(size: 42))
+                        .foregroundStyle(.green)
+                        .frame(width: 44, height: 44)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Nutrition Today")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+
+                        if let goal = nutritionManager.activeGoal {
+                            Text(targetText(current: totals.calories, target: goal.daily_calories, unit: "kcal"))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        } else if totals.calories > 0 {
+                            Text("\(formatWhole(totals.calories)) kcal logged")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Set a nutrition goal")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    if isLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let goal = nutritionManager.activeGoal {
+                    VStack(spacing: 8) {
+                        miniProgressRow(
+                            "Calories",
+                            current: totals.calories,
+                            target: goal.daily_calories,
+                            unit: "kcal",
+                            color: .orange
+                        )
+
+                        HStack(spacing: 10) {
+                            miniNutrient("Protein", value: totals.protein_g, target: goal.protein_g, unit: "g", showsPercent: true)
+                            miniNutrient("Carbs", value: totals.carb_g, target: goal.carb_g, unit: "g", showsPercent: true)
+                            miniNutrient("Fat", value: totals.fat_g, target: goal.fat_g, unit: "g", showsPercent: true)
+                        }
+
+                        HStack(spacing: 10) {
+                            miniNutrient("Sugar", value: totals.sugar_g, target: goal.sugar_g, unit: "g", isLimit: true)
+                            miniNutrient("Sodium", value: totals.sodium_mg, target: goal.sodium_mg, unit: "mg", isLimit: true)
+                        }
+                    }
+                }
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(.systemBackground))
+                    .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color(.separator), lineWidth: 1)
+                    }
+            }
+        }
+        .buttonStyle(.plain)
+        .task {
+            await refresh()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            Task { await refresh() }
+        }
+        .onChange(of: selectedTab) { _, newValue in
+            guard newValue == 0 else { return }
+            Task { await refresh() }
+        }
+    }
+
+    private func miniProgressRow(_ title: String, current: Double, target: Double, unit: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(targetText(current: current, target: target, unit: unit))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if target > 0 {
+                ProgressView(value: progress(current: current, target: target))
+                    .tint(color)
+            }
+        }
+    }
+
+    private func miniNutrient(
+        _ title: String,
+        value: Double,
+        target: Double,
+        unit: String,
+        isLimit: Bool = false,
+        showsPercent: Bool = false
+    ) -> some View {
+        let overLimit = isLimit && target > 0 && value > target
+
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            if showsPercent {
+                Text(percentUsed(value, target))
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.primary)
+            }
+            Text("\(formatWhole(value))/\(formatWhole(target))\(unit)")
+                .font(showsPercent ? .caption2 : .caption)
+                .fontWeight(.regular)
+                .foregroundStyle(overLimit ? Color.red : Color.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+            if overLimit {
+                Text("+\(formatWhole(value - target))")
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @MainActor
+    private func refresh() async {
+        isLoading = true
+        defer { isLoading = false }
+        await nutritionManager.loadActiveGoal()
+        totals = await nutritionManager.dailyTotals(for: Date())
+    }
+
+    private func progress(current: Double, target: Double) -> Double {
+        guard target > 0 else { return 0 }
+        return min(max(current / target, 0), 1)
+    }
+
+    private func formatWhole(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(0)))
+    }
+
+    private func targetText(current: Double, target: Double, unit: String) -> String {
+        guard target > 0 else {
+            return "\(formatWhole(current)) \(unit)"
+        }
+        return "\(formatWhole(current)) / \(formatWhole(target)) \(unit)"
+    }
+
+    private func percentUsed(_ current: Double, _ target: Double) -> String {
+        guard target > 0 else { return "--" }
+        return "\(Int((100 * current / target).rounded()))%"
+    }
+}

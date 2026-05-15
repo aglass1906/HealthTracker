@@ -24,6 +24,170 @@ enum MealCategory: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+// MARK: - Nutrition goals
+
+enum NutritionGoalType: String, Codable, CaseIterable, Identifiable, Sendable {
+    case lowCarb = "low_carb"
+    case mediterranean
+    case balanced
+    case custom
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .lowCarb: return "Low Carb"
+        case .mediterranean: return "Mediterranean"
+        case .balanced: return "Balanced"
+        case .custom: return "Custom"
+        }
+    }
+}
+
+struct NutritionGoal: Codable, Identifiable, Hashable, Sendable {
+    var id: UUID
+    var user_id: UUID
+    var goal_type: NutritionGoalType
+    var daily_calories: Double
+    var protein_g: Double
+    var carb_g: Double
+    var fat_g: Double
+    var sugar_g: Double
+    var sodium_mg: Double
+    var fiber_g: Double?
+    var is_active: Bool
+
+    var saltEquivalentG: Double {
+        sodium_mg * 2.5 / 1000
+    }
+
+    static func preset(_ type: NutritionGoalType, userId: UUID) -> NutritionGoal {
+        let values = NutritionGoalPreset.values(for: type)
+        return NutritionGoal(
+            id: UUID(),
+            user_id: userId,
+            goal_type: type,
+            daily_calories: values.dailyCalories,
+            protein_g: values.proteinG,
+            carb_g: values.carbG,
+            fat_g: values.fatG,
+            sugar_g: values.sugarG,
+            sodium_mg: values.sodiumMg,
+            fiber_g: values.fiberG,
+            is_active: true
+        )
+    }
+}
+
+struct NutritionGoalPreset: Hashable, Sendable {
+    let dailyCalories: Double
+    let proteinG: Double
+    let carbG: Double
+    let fatG: Double
+    let sugarG: Double
+    let sodiumMg: Double
+    let fiberG: Double?
+
+    static func values(for type: NutritionGoalType) -> NutritionGoalPreset {
+        switch type {
+        case .balanced, .custom:
+            return NutritionGoalPreset(
+                dailyCalories: 2000,
+                proteinG: 125,
+                carbG: 225,
+                fatG: 67,
+                sugarG: 50,
+                sodiumMg: 2300,
+                fiberG: 28
+            )
+        case .lowCarb:
+            return NutritionGoalPreset(
+                dailyCalories: 2000,
+                proteinG: 150,
+                carbG: 100,
+                fatG: 110,
+                sugarG: 35,
+                sodiumMg: 2300,
+                fiberG: 25
+            )
+        case .mediterranean:
+            return NutritionGoalPreset(
+                dailyCalories: 2000,
+                proteinG: 110,
+                carbG: 225,
+                fatG: 75,
+                sugarG: 45,
+                sodiumMg: 2000,
+                fiberG: 30
+            )
+        }
+    }
+}
+
+struct NutritionDayTotals: Hashable, Sendable {
+    var calories: Double = 0
+    var protein_g: Double = 0
+    var carb_g: Double = 0
+    var fat_g: Double = 0
+    var sugar_g: Double = 0
+    var sodium_mg: Double = 0
+
+    var saltEquivalentG: Double {
+        sodium_mg * 2.5 / 1000
+    }
+}
+
+struct NutritionProgressItem: Identifiable, Hashable, Sendable {
+    enum Kind: String, CaseIterable, Identifiable, Sendable {
+        case calories
+        case protein
+        case carbs
+        case fat
+        case sugar
+        case sodium
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .calories: return "Calories"
+            case .protein: return "Protein"
+            case .carbs: return "Carbs"
+            case .fat: return "Fat"
+            case .sugar: return "Sugar"
+            case .sodium: return "Sodium"
+            }
+        }
+
+        var isLimitOriented: Bool {
+            switch self {
+            case .sugar, .sodium: return true
+            case .calories, .protein, .carbs, .fat: return false
+            }
+        }
+    }
+
+    let kind: Kind
+    let current: Double
+    let target: Double
+    let unit: String
+
+    var id: Kind { kind }
+
+    var progress: Double {
+        guard target > 0 else { return 0 }
+        return current / target
+    }
+
+    var clampedProgress: Double {
+        min(max(progress, 0), 1)
+    }
+
+    var isOverTarget: Bool {
+        kind.isLimitOriented && progress > 1
+    }
+}
+
 struct NutritionLogRow: Codable, Identifiable, Hashable {
     let id: UUID
     let user_id: UUID
