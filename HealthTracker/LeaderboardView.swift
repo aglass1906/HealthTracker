@@ -60,6 +60,7 @@ class LeaderboardViewModel: ObservableObject {
     func fetchLeaderboard(for familyId: UUID) async {
         isLoading = true
         currentFamilyId = familyId
+        entries = []
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
@@ -266,7 +267,7 @@ struct LeaderboardView: View {
             }
         }
         .animation(.easeInOut, value: showCopiedAlert)
-        .task {
+        .task(id: familyId) {
             await viewModel.fetchLeaderboard(for: familyId)
         }
         .refreshable {

@@ -109,6 +109,8 @@ class SocialFeedViewModel: ObservableObject {
     
     func fetchFeed(for familyId: UUID) async {
         isLoading = true
+        events = []
+        communityDigest = nil
         
         do {
             // 1. Get community members for mapping
@@ -349,10 +351,8 @@ struct SocialFeedView: View {
                 }
             }
         }
-        .task {
-            if viewModel.events.isEmpty {
-                await viewModel.fetchFeed(for: familyId)
-            }
+        .task(id: familyId) {
+            await viewModel.fetchFeed(for: familyId)
         }
         .onChange(of: viewModel.selectedTimeframe) { _ in
             Task { await viewModel.fetchFeed(for: familyId) }

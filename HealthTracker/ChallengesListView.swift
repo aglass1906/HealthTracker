@@ -112,11 +112,8 @@ struct ChallengesListView: View {
             }
             
         }
-        .task {
-            // Refetch when view appears (e.g. switched tabs)
-            if viewModel.activeChallenges.isEmpty {
-                await viewModel.fetchActiveChallenges(for: familyId)
-            }
+        .task(id: familyId) {
+            await viewModel.fetchActiveChallenges(for: familyId)
         }
     }
     

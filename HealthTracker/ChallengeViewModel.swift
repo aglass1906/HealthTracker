@@ -127,6 +127,7 @@ class ChallengeViewModel: ObservableObject {
     func fetchActiveChallenges(for familyId: UUID) async {
         isLoading = true
         errorMessage = nil
+        activeChallenges = []
         
         do {
             let challenges: [Challenge] = try await client
