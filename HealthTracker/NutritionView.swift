@@ -299,17 +299,33 @@ private struct LineItemEditTarget: Identifiable, Hashable {
     var id: UUID { item.id }
 }
 
+private struct LineItemCopyTarget: Identifiable, Hashable {
+    let log: NutritionLogRow
+    let item: NutritionLogItemRow
+    let initialDate: Date
+    var id: String { "\(item.id.uuidString)-\(initialDate.timeIntervalSince1970)" }
+}
+
+private enum NutritionMainSection: String, CaseIterable, Identifiable {
+    case mealsLog = "Meals & Log"
+    case analysis = "Analysis"
+
+    var id: String { rawValue }
+}
+
 // MARK: - Main view
 
 struct NutritionView: View {
     @StateObject private var nutritionManager = NutritionManager.shared
     @AppStorage("syncNutritionToHealthKit") private var syncNutritionToHealthKit = true
+    @State private var selectedMainSection: NutritionMainSection = .mealsLog
     @State private var selectedDate = Date()
     @State private var showingLogSheet = false
     @State private var showingManageFavorites = false
     @State private var showingGoalSettings = false
     @State private var editingLog: NutritionLogRow?
     @State private var editingLineItem: LineItemEditTarget?
+    @State private var copyingLineItem: LineItemCopyTarget?
 
     private var selectedDayStart: Date {
         Calendar.current.startOfDay(for: selectedDate)
@@ -337,140 +353,18 @@ struct NutritionView: View {
         NavigationStack {
             List {
                 Section {
-                    let t = nutritionManager.loadedDayTotals
-                    let pct = nutritionManager.macroPercentOfCalories(
-                        calories: t.calories,
-                        protein: t.protein,
-                        carbs: t.carbs,
-                        fat: t.fat
-                    )
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(daySummaryTitle)
-                                .font(.headline)
-                            Spacer(minLength: 8)
-                            DatePicker(
-                                "Day",
-                                selection: $selectedDate,
-                                in: selectableDateRange,
-                                displayedComponents: [.date]
-                            )
-                            .labelsHidden()
-                            .datePickerStyle(.compact)
-                            .id(selectedDate)
-                            .accessibilityLabel("Day for meal list")
-                        }
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 10) {
-                                macroChip("Cal", value: Int(t.calories.rounded()), unit: "kcal")
-                                macroChip("P", value: Int(t.protein.rounded()), unit: "g")
-                                macroChip("C", value: Int(t.carbs.rounded()), unit: "g")
-                                macroChip("F", value: Int(t.fat.rounded()), unit: "g")
-                                macroChip("Sugar", value: Int(t.sugar.rounded()), unit: "g")
-                                macroChip("Sodium", value: Int(t.sodium.rounded()), unit: "mg")
-                            }
-                        }
-                        if let pp = pct.protein, let pc = pct.carbs, let pf = pct.fat {
-                            Text(String(format: "Macro %% of kcal · P %.0f%% · C %.0f%% · F %.0f%%", pp, pc, pf))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("Macro % of kcal · —")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
+                    Picker("Nutrition section", selection: $selectedMainSection) {
+                        ForEach(NutritionMainSection.allCases) { section in
+                            Text(section.rawValue).tag(section)
                         }
                     }
-                    .padding(.vertical, 4)
+                    .pickerStyle(.segmented)
                 }
 
-                Section("Daily Goal") {
-                    Button {
-                        showingGoalSettings = true
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "target")
-                                .font(.title3)
-                                .foregroundStyle(.green)
-                                .frame(width: 32, height: 32)
-
-                            VStack(alignment: .leading, spacing: 3) {
-                                if let goal = nutritionManager.activeGoal {
-                                    Text(goal.goal_type.displayName)
-                                        .font(.headline)
-                                        .foregroundStyle(.primary)
-                                    Text("\(Int(goal.daily_calories.rounded())) kcal · P \(Int(goal.protein_g.rounded()))g · C \(Int(goal.carb_g.rounded()))g · F \(Int(goal.fat_g.rounded()))g")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    Text("Target · P \(macroTargetPercent(goal.protein_g, caloriesPerGram: 4, dailyCalories: goal.daily_calories)) · C \(macroTargetPercent(goal.carb_g, caloriesPerGram: 4, dailyCalories: goal.daily_calories)) · F \(macroTargetPercent(goal.fat_g, caloriesPerGram: 9, dailyCalories: goal.daily_calories))")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                    Text("Sugar \(Int(goal.sugar_g.rounded()))g · Sodium \(Int(goal.sodium_mg.rounded()))mg")
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                } else {
-                                    Text("Set a nutrition goal")
-                                        .font(.headline)
-                                        .foregroundStyle(.primary)
-                                    Text("Choose a preset or enter custom daily targets.")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 2)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                Section("Goal Progress") {
-                    if let goal = nutritionManager.activeGoal {
-                        let totals = nutritionManager.loadedDayNutritionTotals
-                        let progressItems = nutritionManager.progress(for: totals, goal: goal)
-
-                        if nutritionManager.logs.isEmpty {
-                            Text("No meals logged for this day yet.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        ForEach(progressItems) { item in
-                            NutritionProgressRow(item: item)
-                        }
-                    } else {
-                        Button {
-                            showingGoalSettings = true
-                        } label: {
-                            Label("Set a goal to track daily progress", systemImage: "target")
-                        }
-                    }
-                }
-
-                Section("Meals") {
-                    if nutritionManager.logs.isEmpty {
-                        Text("No meals logged for this day.")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(nutritionManager.logs) { log in
-                            NutritionLogRowView(
-                                log: log,
-                                onEditMeal: { editingLog = log },
-                                onEditItem: { item in
-                                    editingLineItem = LineItemEditTarget(log: log, item: item)
-                                }
-                            )
-                        }
-                        .onDelete { offsets in
-                            for i in offsets {
-                                let id = nutritionManager.logs[i].id
-                                Task { await nutritionManager.deleteLog(id: id) }
-                            }
-                        }
-                    }
+                if selectedMainSection == .analysis {
+                    analysisSections
+                } else {
+                    mealsLogSections
                 }
             }
             .navigationTitle("Nutrition")
@@ -480,22 +374,23 @@ struct NutritionView: View {
                         Button {
                             showingManageFavorites = true
                         } label: {
-                            Label("Favorites", systemImage: "star.circle")
-                                .labelStyle(.titleAndIcon)
-                                .font(.subheadline)
+                            Image(systemName: "star.circle")
                         }
+                        .accessibilityLabel("Favorites")
                         Button {
                             showingGoalSettings = true
                         } label: {
                             Image(systemName: "target")
                         }
                         .accessibilityLabel("Nutrition goal")
-                        Button {
-                            showingLogSheet = true
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
+                        if selectedMainSection == .mealsLog {
+                            Button {
+                                showingLogSheet = true
+                            } label: {
+                                Image(systemName: "plus.circle.fill")
+                            }
+                            .accessibilityLabel("Log food")
                         }
-                        .accessibilityLabel("Log food")
                     }
                 }
             }
@@ -521,6 +416,14 @@ struct NutritionView: View {
             .sheet(item: $editingLineItem) { target in
                 EditNutritionLineItemSheet(log: target.log, item: target.item)
             }
+            .sheet(item: $copyingLineItem) { target in
+                CopyNutritionLineItemSheet(
+                    log: target.log,
+                    item: target.item,
+                    initialDate: target.initialDate,
+                    syncToHealthKit: syncNutritionToHealthKit
+                )
+            }
             .task(id: selectedDayStart) {
                 await nutritionManager.loadActiveGoal()
                 await nutritionManager.loadLogs(from: selectedDayStart, to: selectedDayEnd)
@@ -528,6 +431,180 @@ struct NutritionView: View {
             .refreshable {
                 await nutritionManager.loadActiveGoal()
                 await nutritionManager.loadLogs(from: selectedDayStart, to: selectedDayEnd)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var analysisSections: some View {
+        Section("Nutrition Analysis") {
+            daySummaryContent
+        }
+        dailyGoalSection
+        goalProgressSection
+    }
+
+    @ViewBuilder
+    private var mealsLogSections: some View {
+        Section("Daily Meals Entry & Log") {
+            daySummaryContent
+            Button {
+                showingLogSheet = true
+            } label: {
+                Label("Log food", systemImage: "plus.circle.fill")
+                    .font(.headline)
+            }
+            Button {
+                showingManageFavorites = true
+            } label: {
+                Label("Favorites and recipes", systemImage: "star.circle")
+            }
+        }
+        mealsSection
+    }
+
+    private var daySummaryContent: some View {
+        let t = nutritionManager.loadedDayTotals
+        let pct = nutritionManager.macroPercentOfCalories(
+            calories: t.calories,
+            protein: t.protein,
+            carbs: t.carbs,
+            fat: t.fat
+        )
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(daySummaryTitle)
+                    .font(.headline)
+                Spacer(minLength: 8)
+                DatePicker(
+                    "Day",
+                    selection: $selectedDate,
+                    in: selectableDateRange,
+                    displayedComponents: [.date]
+                )
+                .labelsHidden()
+                .datePickerStyle(.compact)
+                .id(selectedDate)
+                .accessibilityLabel("Day for nutrition")
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    macroChip("Cal", value: Int(t.calories.rounded()), unit: "kcal")
+                    macroChip("P", value: Int(t.protein.rounded()), unit: "g")
+                    macroChip("C", value: Int(t.carbs.rounded()), unit: "g")
+                    macroChip("F", value: Int(t.fat.rounded()), unit: "g")
+                    macroChip("Sugar", value: Int(t.sugar.rounded()), unit: "g")
+                    macroChip("Sodium", value: Int(t.sodium.rounded()), unit: "mg")
+                }
+            }
+            if let pp = pct.protein, let pc = pct.carbs, let pf = pct.fat {
+                Text(String(format: "Macro %% of kcal · P %.0f%% · C %.0f%% · F %.0f%%", pp, pc, pf))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Macro % of kcal · —")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var dailyGoalSection: some View {
+        Section("Daily Goal") {
+            Button {
+                showingGoalSettings = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "target")
+                        .font(.title3)
+                        .foregroundStyle(.green)
+                        .frame(width: 32, height: 32)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        if let goal = nutritionManager.activeGoal {
+                            Text(goal.goal_type.displayName)
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text("\(Int(goal.daily_calories.rounded())) kcal · P \(Int(goal.protein_g.rounded()))g · C \(Int(goal.carb_g.rounded()))g · F \(Int(goal.fat_g.rounded()))g")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("Target · P \(macroTargetPercent(goal.protein_g, caloriesPerGram: 4, dailyCalories: goal.daily_calories)) · C \(macroTargetPercent(goal.carb_g, caloriesPerGram: 4, dailyCalories: goal.daily_calories)) · F \(macroTargetPercent(goal.fat_g, caloriesPerGram: 9, dailyCalories: goal.daily_calories))")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text("Sugar \(Int(goal.sugar_g.rounded()))g · Sodium \(Int(goal.sodium_mg.rounded()))mg")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        } else {
+                            Text("Set a nutrition goal")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text("Choose a preset or enter custom daily targets.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 2)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var goalProgressSection: some View {
+        Section("Goal Progress") {
+            if let goal = nutritionManager.activeGoal {
+                let totals = nutritionManager.loadedDayNutritionTotals
+                let progressItems = nutritionManager.progress(for: totals, goal: goal)
+
+                if nutritionManager.logs.isEmpty {
+                    Text("No meals logged for this day yet.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                ForEach(progressItems) { item in
+                    NutritionProgressRow(item: item)
+                }
+            } else {
+                Button {
+                    showingGoalSettings = true
+                } label: {
+                    Label("Set a goal to track daily progress", systemImage: "target")
+                }
+            }
+        }
+    }
+
+    private var mealsSection: some View {
+        Section("Meals") {
+            if nutritionManager.logs.isEmpty {
+                Text("No meals logged for this day.")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(nutritionManager.logs) { log in
+                    NutritionLogRowView(
+                        log: log,
+                        onEditMeal: { editingLog = log },
+                        onEditItem: { item in
+                            editingLineItem = LineItemEditTarget(log: log, item: item)
+                        },
+                        onCopyItem: { item in
+                            copyingLineItem = LineItemCopyTarget(log: log, item: item, initialDate: selectedDate)
+                        }
+                    )
+                }
+                .onDelete { offsets in
+                    for i in offsets {
+                        let id = nutritionManager.logs[i].id
+                        Task { await nutritionManager.deleteLog(id: id) }
+                    }
+                }
             }
         }
     }
@@ -782,6 +859,7 @@ struct NutritionLogRowView: View {
     let log: NutritionLogRow
     var onEditMeal: () -> Void
     var onEditItem: (NutritionLogItemRow) -> Void
+    var onCopyItem: (NutritionLogItemRow) -> Void
 
     @State private var thumbURL: URL?
 
@@ -847,6 +925,16 @@ struct NutritionLogRowView: View {
                         Spacer()
                         Image(systemName: sourceIcon)
                             .foregroundStyle(.secondary)
+                        Button(action: onEditMeal) {
+                            Label("Edit meal", systemImage: "pencil.circle")
+                                .font(.body)
+                                .labelStyle(.iconOnly)
+                                .foregroundStyle(.secondary)
+                                .frame(minWidth: 36, minHeight: 36)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Edit meal")
                     }
                 }
                 if let n = log.notes, !n.isEmpty {
@@ -864,6 +952,7 @@ struct NutritionLogRowView: View {
                                 items: group.items,
                                 isMultiItem: isMultiItem,
                                 onEditItem: onEditItem,
+                                onCopyItem: onCopyItem,
                                 formatQty: formatQty
                             )
                         } else {
@@ -877,16 +966,7 @@ struct NutritionLogRowView: View {
         }
         .padding(.vertical, 2)
 
-        Group {
-            if isMultiItem {
-                content
-            } else {
-                Button(action: onEditMeal) {
-                    content
-                }
-                .buttonStyle(.plain)
-            }
-        }
+        content
         .task(id: log.photo_path) {
             guard let path = photoPath else {
                 thumbURL = nil
@@ -972,6 +1052,17 @@ struct NutritionLogRowView: View {
             Text("\(Int(item.calories.rounded())) kcal")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+            Button {
+                onCopyItem(item)
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 36, minHeight: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Copy \(item.name) to a new entry")
             if isMultiItem {
                 Button {
                     onEditItem(item)
@@ -1010,6 +1101,7 @@ struct NutritionLogRowView: View {
         switch log.source {
         case "barcode": return "barcode.viewfinder"
         case "photo": return "camera.fill"
+        case "copy": return "doc.on.doc"
         default: return "magnifyingglass"
         }
     }
@@ -1022,6 +1114,7 @@ private struct ComboGroupRow: View {
     let items: [NutritionLogItemRow]
     let isMultiItem: Bool
     let onEditItem: (NutritionLogItemRow) -> Void
+    let onCopyItem: (NutritionLogItemRow) -> Void
     let formatQty: (Double) -> String
 
     @State private var expanded = false
@@ -1077,6 +1170,17 @@ private struct ComboGroupRow: View {
                         Text("\(Int(item.calories.rounded())) kcal")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                        Button {
+                            onCopyItem(item)
+                        } label: {
+                            Image(systemName: "doc.on.doc")
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                                .frame(minWidth: 36, minHeight: 36)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Copy \(item.name) to a new entry")
                         if isMultiItem {
                             Button {
                                 onEditItem(item)
@@ -1375,20 +1479,37 @@ struct LogFoodSheet: View {
 
     private var searchSection: some View {
         VStack(spacing: 12) {
-            HStack {
-                TextField("Food name", text: $searchText)
-                    .textFieldStyle(.roundedBorder)
-                    .submitLabel(.search)
-                    .focused($searchFocused)
-                    .onSubmit {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Search foods")
+                    .font(.headline)
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Food name, brand, or meal item", text: $searchText)
+                        .font(.title3)
+                        .submitLabel(.search)
+                        .focused($searchFocused)
+                        .onSubmit {
+                            searchFocused = false
+                            Task { await runSearch() }
+                        }
+                    Button {
                         searchFocused = false
                         Task { await runSearch() }
+                    } label: {
+                        Image(systemName: "arrow.forward.circle.fill")
+                            .font(.title2)
                     }
-                Button("Search") {
-                    searchFocused = false
-                    Task { await runSearch() }
+                    .disabled(searchText.trimmingCharacters(in: .whitespacesAndNewlines).count < 2 || isLookingUp)
+                    .accessibilityLabel("Search foods")
                 }
-                .disabled(searchText.trimmingCharacters(in: .whitespacesAndNewlines).count < 2 || isLookingUp)
+                .padding(14)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(searchFocused ? Color.accentColor : Color.secondary.opacity(0.25), lineWidth: searchFocused ? 2 : 1)
+                )
             }
             .padding(.horizontal)
             if isLookingUp {
@@ -2607,6 +2728,176 @@ private struct EditNutritionLineItemSheet: View {
             syncToHealthKit: syncNutritionToHealthKit
         )
         if ok {
+            dismiss()
+        }
+    }
+}
+
+// MARK: - Copy saved line item
+
+private struct CopyNutritionLineItemSheet: View {
+    let log: NutritionLogRow
+    let item: NutritionLogItemRow
+    let initialDate: Date
+    let syncToHealthKit: Bool
+
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var nutritionManager = NutritionManager.shared
+    @State private var loggedAt: Date
+    @State private var mealCategory: MealCategory
+    @State private var gramsText: String
+    @State private var quantity: Double
+    @State private var notesText: String = ""
+    @State private var isSaving = false
+
+    init(log: NutritionLogRow, item: NutritionLogItemRow, initialDate: Date, syncToHealthKit: Bool) {
+        self.log = log
+        self.item = item
+        self.initialDate = initialDate
+        self.syncToHealthKit = syncToHealthKit
+
+        let cal = Calendar.current
+        var timeComps = cal.dateComponents([.hour, .minute, .second], from: Date())
+        let dayComps = cal.dateComponents([.year, .month, .day], from: initialDate)
+        timeComps.year = dayComps.year
+        timeComps.month = dayComps.month
+        timeComps.day = dayComps.day
+        _loggedAt = State(initialValue: cal.date(from: timeComps) ?? initialDate)
+        _mealCategory = State(initialValue: MealCategory.defaultForCurrentTime())
+        _gramsText = State(initialValue: String(format: "%.0f", max(item.grams ?? item.serving_amount, 1)))
+        _quantity = State(initialValue: max(item.quantity ?? 1, 0.01))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.name)
+                            .font(.headline)
+                        if let b = item.brand, !b.isEmpty {
+                            Text(b)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Section("New entry") {
+                    DatePicker("Time", selection: $loggedAt, displayedComponents: [.date, .hourAndMinute])
+                    Picker("Category", selection: $mealCategory) {
+                        ForEach(MealCategory.allCases) { c in
+                            Text(c.rawValue).tag(c)
+                        }
+                    }
+                    TextField("Notes (optional)", text: $notesText, axis: .vertical)
+                        .lineLimit(2 ... 5)
+                }
+                Section("Portion") {
+                    Stepper(value: $quantity, in: 0.25 ... 99, step: 0.25) {
+                        Text("Quantity: \(formatQty(quantity))×")
+                    }
+                    .onChange(of: quantity) { _, q in
+                        let baseG = max(FoodCandidateDTO(fromLoggedItem: item).grams ?? 100, 1)
+                        gramsText = String(format: "%.0f", baseG * q)
+                    }
+                    TextField("Total grams", text: $gramsText)
+                        .keyboardType(.decimalPad)
+                }
+                Section("Nutrition") {
+                    let p = scaledPreview
+                    CoreNutritionRows(
+                        calories: p.calories,
+                        proteinG: p.protein,
+                        carbG: p.carbs,
+                        fatG: p.fat,
+                        fiberG: p.fiber,
+                        sodiumMg: p.sodium,
+                        sugarG: p.sugar
+                    )
+                }
+                if let err = nutritionManager.errorMessage {
+                    Section {
+                        Text(err)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+                Section {
+                    Text(
+                        syncToHealthKit
+                            ? "Creates a new entry and adds these totals to Apple Health."
+                            : "Creates a new entry in your account only."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Copy food")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task { await save() }
+                    }
+                    .disabled(isSaving)
+                }
+            }
+        }
+    }
+
+    private var scaledPreview: (calories: Double, protein: Double, carbs: Double, fat: Double, fiber: Double, sodium: Double, sugar: Double) {
+        let base = FoodCandidateDTO(fromLoggedItem: item)
+        let baseG = max(base.grams ?? 100, 1)
+        let parsed = Double(gramsText.replacingOccurrences(of: ",", with: "."))
+        let totalG = max(parsed ?? baseG * quantity, 1)
+        let scaled = base.scaled(gramsEaten: totalG)
+        return (
+            scaled.calories,
+            scaled.protein_g,
+            scaled.carb_g,
+            scaled.fat_g,
+            scaled.fiber_g ?? 0,
+            scaled.sodium_mg ?? 0,
+            scaled.sugarGramsFromNutrients
+        )
+    }
+
+    private func formatQty(_ q: Double) -> String {
+        abs(q.rounded() - q) < 0.001 ? String(format: "%.0f", q) : String(format: "%.2f", q)
+    }
+
+    private func save() async {
+        isSaving = true
+        defer { isSaving = false }
+
+        let base = FoodCandidateDTO(fromLoggedItem: item)
+        let baseG = max(base.grams ?? 100, 1)
+        let parsed = Double(gramsText.replacingOccurrences(of: ",", with: "."))
+        let totalG = max(parsed ?? baseG * quantity, 1)
+        let qty = max(totalG / baseG, 0.01)
+        let scaled = base.scaled(gramsEaten: totalG)
+        let line = NutritionManager.MealSaveLine(
+            scaledTotals: scaled,
+            quantity: qty,
+            perUnitServingAmount: base.serving_amount,
+            perUnitServingUnit: base.serving_unit,
+            comboName: nil
+        )
+        let notesTrim = notesText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let input = NutritionManager.MealSaveInput(
+            source: "copy",
+            mealType: mealCategory.rawValue,
+            notes: notesTrim.isEmpty ? nil : notesTrim,
+            barcodeRaw: nil,
+            photoJPEG: nil,
+            loggedAt: loggedAt,
+            items: [line]
+        )
+
+        if await nutritionManager.saveMeal(input, syncToHealthKit: syncToHealthKit) {
             dismiss()
         }
     }
