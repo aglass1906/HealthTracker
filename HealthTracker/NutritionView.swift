@@ -569,7 +569,10 @@ struct NutritionView: View {
                 }
 
                 ForEach(progressItems) { item in
-                    NutritionProgressRow(item: item)
+                    NutritionProgressRow(
+                        item: item,
+                        contributions: nutritionContributions(for: item.kind)
+                    )
                 }
             } else {
                 Button {
@@ -634,10 +637,86 @@ struct NutritionView: View {
         let percent = max(grams, 0) * caloriesPerGram / dailyCalories * 100
         return "\(Int(percent.rounded()))%"
     }
+
+    private func nutritionContributions(for kind: NutritionProgressItem.Kind) -> [NutritionGoalContribution] {
+        nutritionManager.logs
+            .filter { $0.status == "confirmed" }
+            .flatMap { log in
+                (log.nutrition_log_items ?? []).map { item in
+                    NutritionGoalContribution(
+                        log: log,
+                        item: item,
+                        kind: kind,
+                        amount: amount(for: kind, item: item)
+                    )
+                }
+            }
+            .filter { $0.amount > 0 }
+            .sorted { lhs, rhs in
+                if lhs.amount == rhs.amount {
+                    return lhs.item.name.localizedCaseInsensitiveCompare(rhs.item.name) == .orderedAscending
+                }
+                return lhs.amount > rhs.amount
+            }
+    }
+
+    private func amount(for kind: NutritionProgressItem.Kind, item: NutritionLogItemRow) -> Double {
+        switch kind {
+        case .calories: return item.calories
+        case .protein: return item.protein_g
+        case .carbs: return item.carb_g
+        case .fat: return item.fat_g
+        case .sugar: return item.sugarGramsFromNutrients
+        case .sodium: return item.sodium_mg ?? 0
+        }
+    }
+}
+
+private struct NutritionGoalContribution: Identifiable, Hashable {
+    let log: NutritionLogRow
+    let item: NutritionLogItemRow
+    let kind: NutritionProgressItem.Kind
+    let amount: Double
+
+    var id: String {
+        "\(log.id.uuidString)-\(item.id.uuidString)-\(kind.rawValue)"
+    }
+
+    var mealLabel: String {
+        let time = log.logged_at.formatted(date: .omitted, time: .shortened)
+        guard let meal = log.meal_type, !meal.isEmpty else { return time }
+        return "\(meal) · \(time)"
+    }
+
+    var detailText: String {
+        var parts: [String] = []
+        if let brand = item.brand, !brand.isEmpty {
+            parts.append(brand)
+        }
+        if let quantity = item.quantity, quantity > 0, abs(quantity - 1) > 0.001 {
+            parts.append("x\(formatQuantity(quantity))")
+        }
+        if let grams = item.grams, grams > 0 {
+            parts.append("\(formatAmount(grams))g")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func formatQuantity(_ value: Double) -> String {
+        value.rounded(.toNearestOrAwayFromZero) == value ? String(format: "%.0f", value) : String(format: "%.1f", value)
+    }
+
+    private func formatAmount(_ value: Double) -> String {
+        if value >= 100 || abs(value.rounded() - value) < 0.05 {
+            return String(format: "%.0f", value)
+        }
+        return String(format: "%.1f", value)
+    }
 }
 
 private struct NutritionProgressRow: View {
     let item: NutritionProgressItem
+    let contributions: [NutritionGoalContribution]
 
     private var tint: Color {
         if item.isOverTarget { return .red }
@@ -654,6 +733,26 @@ private struct NutritionProgressRow: View {
     }
 
     var body: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 8) {
+                if contributions.isEmpty {
+                    Text("No food items contributed to \(item.kind.displayName.lowercased()) for this day.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(contributions) { contribution in
+                        contributionRow(contribution)
+                    }
+                }
+            }
+            .padding(.top, 4)
+        } label: {
+            progressSummary
+        }
+        .padding(.vertical, 3)
+    }
+
+    private var progressSummary: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline) {
                 Text(item.kind.displayName)
@@ -680,7 +779,38 @@ private struct NutritionProgressRow: View {
                     .foregroundStyle(.red)
             }
         }
-        .padding(.vertical, 3)
+    }
+
+    private func contributionRow(_ contribution: NutritionGoalContribution) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "fork.knife")
+                .font(.caption)
+                .foregroundStyle(tint)
+                .frame(width: 18, height: 18)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(contribution.item.name)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                if !contribution.detailText.isEmpty {
+                    Text(contribution.detailText)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                Text(contribution.mealLabel)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Text("\(formatted(contribution.amount)) \(item.unit)")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+        }
     }
 
     private var valueText: String {
