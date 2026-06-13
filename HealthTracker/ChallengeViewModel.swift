@@ -26,6 +26,10 @@ struct DailyStatDB: Codable {
     let distance: Double
     let workouts_count: Int? 
     let exercise_minutes: Int?
+    let move_ring_value: Double?
+    let exercise_ring_value: Double?
+    let stand_ring_value: Double?
+    let all_rings_closed: Int?
 }
 
 class ChallengeViewModel: ObservableObject {
@@ -121,6 +125,31 @@ class ChallengeViewModel: ObservableObject {
 
     
     let client = AuthManager.shared.client
+
+    private func aggregateValue(for metric: ChallengeMetric, stats: [DailyStatDB]) -> Double {
+        switch metric {
+        case .steps:
+            return Double(stats.reduce(0) { $0 + $1.steps })
+        case .calories:
+            return Double(stats.reduce(0) { $0 + $1.calories })
+        case .distance:
+            return stats.reduce(0) { $0 + $1.distance }
+        case .exercise_minutes:
+            return Double(stats.reduce(into: 0) { $0 += ($1.exercise_minutes ?? 0) })
+        case .flights:
+            return Double(stats.reduce(0) { $0 + $1.flights })
+        case .workouts:
+            return Double(stats.reduce(into: 0) { $0 += ($1.workouts_count ?? 0) })
+        case .move_ring:
+            return stats.reduce(0) { $0 + ($1.move_ring_value ?? 0) }
+        case .exercise_ring:
+            return stats.reduce(0) { $0 + ($1.exercise_ring_value ?? 0) }
+        case .stand_ring:
+            return stats.reduce(0) { $0 + ($1.stand_ring_value ?? 0) }
+        case .all_rings_closed:
+            return Double(stats.reduce(0) { $0 + ($1.all_rings_closed ?? 0) })
+        }
+    }
     
     // MARK: - Fetch Challenges
     
@@ -365,24 +394,7 @@ class ChallengeViewModel: ObservableObject {
             for profile in profiles {
                 let userStats = stats.filter { $0.user_id == profile.id }
                 
-                var totalValue: Double = 0
-                
-                switch challenge.metric {
-                case .steps:
-                    totalValue = Double(userStats.reduce(0) { $0 + $1.steps })
-                case .calories:
-                    totalValue = Double(userStats.reduce(0) { $0 + $1.calories })
-                case .distance:
-                    totalValue = userStats.reduce(0) { $0 + $1.distance }
-                case .exercise_minutes:
-                    let totalInt = userStats.reduce(into: 0) { $0 += ($1.exercise_minutes ?? 0) }
-                    totalValue = Double(totalInt)
-                case .flights:
-                    totalValue = Double(userStats.reduce(0) { $0 + $1.flights })
-                case .workouts:
-                    let totalInt = userStats.reduce(into: 0) { $0 += ($1.workouts_count ?? 0) }
-                    totalValue = Double(totalInt)
-                }
+                let totalValue = aggregateValue(for: challenge.metric, stats: userStats)
                 
                 let progress: Double
                 
@@ -693,23 +705,7 @@ class ChallengeViewModel: ObservableObject {
             for profile in profiles {
                 let userStats = stats.filter { $0.user_id == profile.id }
                 
-                var totalValue: Double = 0
-                switch challenge.metric {
-                case .steps:
-                    totalValue = Double(userStats.reduce(0) { $0 + $1.steps })
-                case .calories:
-                    totalValue = Double(userStats.reduce(0) { $0 + $1.calories })
-                case .flights:
-                    totalValue = Double(userStats.reduce(0) { $0 + $1.flights })
-                case .distance:
-                    totalValue = userStats.reduce(0) { $0 + $1.distance }
-                case .exercise_minutes:
-                    let totalInt = userStats.reduce(into: 0) { $0 += ($1.exercise_minutes ?? 0) }
-                    totalValue = Double(totalInt)
-                case .workouts:
-                    let totalInt = userStats.reduce(into: 0) { $0 += ($1.workouts_count ?? 0) }
-                    totalValue = Double(totalInt)
-                }
+                let totalValue = aggregateValue(for: challenge.metric, stats: userStats)
                 
                 // For round stats, progress might be relative to leader or target?
                 // Rounds usually don't have a fixed "target", it's "most X".
@@ -972,22 +968,7 @@ class ChallengeViewModel: ObservableObject {
                 
                 for profile in profiles {
                     let userStats = stats.filter { $0.user_id == profile.id }
-                    var totalValue: Double = 0
-                    
-                    switch challenge.metric {
-                    case .steps:
-                        totalValue = Double(userStats.reduce(0) { $0 + $1.steps })
-                    case .calories:
-                        totalValue = Double(userStats.reduce(0) { $0 + $1.calories })
-                    case .flights:
-                        totalValue = Double(userStats.reduce(0) { $0 + $1.flights })
-                    case .distance:
-                        totalValue = userStats.reduce(0) { $0 + $1.distance }
-                    case .exercise_minutes:
-                        totalValue = Double(userStats.reduce(into: 0) { $0 += ($1.exercise_minutes ?? 0) })
-                    case .workouts:
-                        totalValue = Double(userStats.reduce(into: 0) { $0 += ($1.workouts_count ?? 0) })
-                    }
+                    let totalValue = aggregateValue(for: challenge.metric, stats: userStats)
                     
                     userTotals.append((userId: profile.id, value: totalValue))
                 }

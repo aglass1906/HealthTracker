@@ -165,21 +165,24 @@ class DashboardCommunityViewModel: ObservableObject {
                 let p = profiles.first(where: { $0.id == stepStat.user_id })
                 // Converting to LeaderboardEntry for UI reusability, or just a simple struct
                 self.stepChampion = LeaderboardEntry(
-                    user_id: stepStat.user_id, date: dateString, steps: stepStat.steps, calories: 0, flights: 0, distance: 0, exercise_minutes: 0, workouts_count: 0, profile: p
+                    user_id: stepStat.user_id, date: dateString, steps: stepStat.steps, calories: 0, flights: 0, distance: 0, exercise_minutes: 0, workouts_count: 0,
+                    move_ring_value: 0, exercise_ring_value: 0, stand_ring_value: 0, all_rings_closed: 0, profile: p
                 )
             }
             
             if let flightStat = stats.max(by: { $0.flights < $1.flights }), flightStat.flights > 0 {
                 let p = profiles.first(where: { $0.id == flightStat.user_id })
                  self.flightChampion = LeaderboardEntry(
-                    user_id: flightStat.user_id, date: dateString, steps: 0, calories: 0, flights: flightStat.flights, distance: 0, exercise_minutes: 0, workouts_count: 0, profile: p
+                    user_id: flightStat.user_id, date: dateString, steps: 0, calories: 0, flights: flightStat.flights, distance: 0, exercise_minutes: 0, workouts_count: 0,
+                    move_ring_value: 0, exercise_ring_value: 0, stand_ring_value: 0, all_rings_closed: 0, profile: p
                 )
             }
             
             if let workoutStat = stats.max(by: { $0.workouts_count < $1.workouts_count }), workoutStat.workouts_count > 0 {
                 let p = profiles.first(where: { $0.id == workoutStat.user_id })
                  self.workoutChampion = LeaderboardEntry(
-                    user_id: workoutStat.user_id, date: dateString, steps: 0, calories: 0, flights: 0, distance: 0, exercise_minutes: 0, workouts_count: workoutStat.workouts_count, profile: p
+                    user_id: workoutStat.user_id, date: dateString, steps: 0, calories: 0, flights: 0, distance: 0, exercise_minutes: 0, workouts_count: workoutStat.workouts_count,
+                    move_ring_value: 0, exercise_ring_value: 0, stand_ring_value: 0, all_rings_closed: 0, profile: p
                 )
             }
             

@@ -9,6 +9,92 @@ import SwiftUI
 import Supabase
 import Combine
 
+enum LeaderboardMetric: String, CaseIterable, Identifiable {
+    case steps
+    case calories
+    case distance
+    case flights
+    case exercise
+    case workouts
+    case moveRing
+    case exerciseRing
+    case standRing
+    case allRingsClosed
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .steps: return "Steps"
+        case .calories: return "Calories"
+        case .distance: return "Distance"
+        case .flights: return "Flights"
+        case .exercise: return "Exercise Minutes"
+        case .workouts: return "Workouts"
+        case .moveRing: return "Move Ring"
+        case .exerciseRing: return "Exercise Ring"
+        case .standRing: return "Stand Ring"
+        case .allRingsClosed: return "All Rings Closed"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .steps: return "figure.walk"
+        case .calories: return "flame.fill"
+        case .distance: return "map.fill"
+        case .flights: return "stairs"
+        case .exercise: return "stopwatch"
+        case .workouts: return "figure.run"
+        case .moveRing, .exerciseRing, .standRing: return "circle.fill"
+        case .allRingsClosed: return "circle.circle.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .steps: return .blue
+        case .calories: return .orange
+        case .distance: return .green
+        case .flights: return .purple
+        case .exercise: return .teal
+        case .workouts: return .indigo
+        case .moveRing: return .red
+        case .exerciseRing: return .green
+        case .standRing: return .blue
+        case .allRingsClosed: return .pink
+        }
+    }
+
+    var unit: String {
+        switch self {
+        case .steps: return "steps"
+        case .calories, .moveRing: return "kcal"
+        case .distance: return "m"
+        case .flights: return "flights"
+        case .exercise, .exerciseRing: return "min"
+        case .workouts: return "workouts"
+        case .standRing: return "hrs"
+        case .allRingsClosed: return "days"
+        }
+    }
+
+    var databaseColumn: String {
+        switch self {
+        case .steps: return "steps"
+        case .calories: return "calories"
+        case .distance: return "distance"
+        case .flights: return "flights"
+        case .exercise: return "exercise_minutes"
+        case .workouts: return "workouts_count"
+        case .moveRing: return "move_ring_value"
+        case .exerciseRing: return "exercise_ring_value"
+        case .standRing: return "stand_ring_value"
+        case .allRingsClosed: return "all_rings_closed"
+        }
+    }
+}
+
 struct LeaderboardEntry: Identifiable, Codable {
     let id = UUID() // Local ID for UI
     let user_id: UUID
@@ -19,6 +105,10 @@ struct LeaderboardEntry: Identifiable, Codable {
     let distance: Double
     let exercise_minutes: Int
     let workouts_count: Int
+    let move_ring_value: Double
+    let exercise_ring_value: Double
+    let stand_ring_value: Double
+    let all_rings_closed: Int
     
     // Joined profile
     let profile: Profile?
@@ -32,6 +122,10 @@ struct LeaderboardEntry: Identifiable, Codable {
         case distance
         case exercise_minutes
         case workouts_count
+        case move_ring_value
+        case exercise_ring_value
+        case stand_ring_value
+        case all_rings_closed
         case profile
     }
 }
@@ -39,7 +133,7 @@ struct LeaderboardEntry: Identifiable, Codable {
 class LeaderboardViewModel: ObservableObject {
     @Published var entries: [LeaderboardEntry] = []
     @Published var isLoading = false
-    @Published var selectedMetric: HealthMetric = .steps {
+    @Published var selectedMetric: LeaderboardMetric = .steps {
         didSet {
             Task { await fetchLeaderboard(for: currentFamilyId) }
         }
@@ -83,6 +177,10 @@ class LeaderboardViewModel: ObservableObject {
                 let distance: Double
                 let exercise_minutes: Int
                 let workouts_count: Int
+                let move_ring_value: Double
+                let exercise_ring_value: Double
+                let stand_ring_value: Double
+                let all_rings_closed: Int
             }
             
             let stats: [DailyStat] = try await client
@@ -106,6 +204,10 @@ class LeaderboardViewModel: ObservableObject {
                     distance: stat.distance,
                     exercise_minutes: stat.exercise_minutes,
                     workouts_count: stat.workouts_count,
+                    move_ring_value: stat.move_ring_value,
+                    exercise_ring_value: stat.exercise_ring_value,
+                    stand_ring_value: stat.stand_ring_value,
+                    all_rings_closed: stat.all_rings_closed,
                     profile: profile
                 )
             }
@@ -124,6 +226,10 @@ class LeaderboardViewModel: ObservableObject {
         case .flights: return Double(entry.flights)
         case .exercise: return Double(entry.exercise_minutes)
         case .workouts: return Double(entry.workouts_count)
+        case .moveRing: return entry.move_ring_value
+        case .exerciseRing: return entry.exercise_ring_value
+        case .standRing: return entry.stand_ring_value
+        case .allRingsClosed: return Double(entry.all_rings_closed)
         }
     }
     
@@ -133,9 +239,18 @@ class LeaderboardViewModel: ObservableObject {
         
         if selectedMetric == .distance {
              return String(format: "%.2f %@", value, unit)
+        } else if selectedMetric == .allRingsClosed {
+            return value >= 1 ? "Closed" : "Not closed"
         } else {
              return String(format: "%.0f %@", value, unit)
         }
+    }
+
+    func relativeProgress(for entry: LeaderboardEntry) -> Double? {
+        guard let leader = entries.first else { return nil }
+        let maxValue = getMetricValue(for: leader)
+        guard maxValue > 0 else { return nil }
+        return min(max(getMetricValue(for: entry) / maxValue, 0), 1)
     }
     
     func copyToClipboard() {
@@ -158,28 +273,40 @@ struct LeaderboardView: View {
     let familyId: UUID
     @StateObject private var viewModel = LeaderboardViewModel()
     @State private var showCopiedAlert = false
+    @State private var showingDatePicker = false
     
     var body: some View {
         VStack {
-            Picker("Metric", selection: $viewModel.selectedMetric) {
-                ForEach(HealthMetric.allCases) { metric in
-                    Text(metric.displayName).tag(metric)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Choose a metric and date")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 12) {
+                    Picker("Metric", selection: $viewModel.selectedMetric) {
+                        ForEach(LeaderboardMetric.allCases) { metric in
+                            Label(metric.displayName, systemImage: metric.icon).tag(metric)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Spacer()
+
+                    Button {
+                        showingDatePicker = true
+                    } label: {
+                        Label(
+                            viewModel.selectedDate.formatted(date: .abbreviated, time: .omitted),
+                            systemImage: "calendar"
+                        )
+                    }
+                    .buttonStyle(.bordered)
                 }
             }
-            .pickerStyle(.segmented)
             .padding(.horizontal)
             .padding(.top)
             
             HStack {
-                DatePicker(
-                    "",
-                    selection: $viewModel.selectedDate,
-                    in: ...Date(),
-                    displayedComponents: .date
-                )
-                .labelsHidden()
-                .datePickerStyle(.compact)
-
                 Text("\(viewModel.selectedMetric.displayName) Leaderboard")
                     .font(.headline)
 
@@ -240,10 +367,7 @@ struct LeaderboardView: View {
                             Spacer()
                             
                             // Visualize relative progress
-                            let maxVal = viewModel.getMetricValue(for: viewModel.entries.first!)
-                            if maxVal > 0 {
-                                let currentVal = viewModel.getMetricValue(for: entry)
-                                let progress = currentVal / maxVal
+                            if let progress = viewModel.relativeProgress(for: entry) {
                                 Circle()
                                     .trim(from: 0, to: progress)
                                     .stroke(viewModel.selectedMetric.color, lineWidth: 4)
@@ -272,6 +396,40 @@ struct LeaderboardView: View {
         }
         .refreshable {
             await viewModel.fetchLeaderboard(for: familyId)
+        }
+        .sheet(isPresented: $showingDatePicker) {
+            LeaderboardDatePickerSheet(selectedDate: $viewModel.selectedDate)
+                .presentationDetents([.medium])
+        }
+    }
+}
+
+private struct LeaderboardDatePickerSheet: View {
+    @Binding var selectedDate: Date
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            DatePicker(
+                "Leaderboard Date",
+                selection: $selectedDate,
+                in: ...Date(),
+                displayedComponents: .date
+            )
+            .datePickerStyle(.graphical)
+            .padding()
+            .onChange(of: selectedDate) {
+                dismiss()
+            }
+            .navigationTitle("Select Date")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
         }
     }
 }

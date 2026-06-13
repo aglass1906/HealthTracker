@@ -94,6 +94,10 @@ enum ChallengeMetric: String, Codable, CaseIterable {
     case exercise_minutes
     case flights
     case workouts
+    case move_ring
+    case exercise_ring
+    case stand_ring
+    case all_rings_closed
     
     var displayName: String {
         switch self {
@@ -103,6 +107,10 @@ enum ChallengeMetric: String, Codable, CaseIterable {
         case .exercise_minutes: return "Exercise Minutes"
         case .flights: return "Flights"
         case .workouts: return "Workouts"
+        case .move_ring: return "Move Ring"
+        case .exercise_ring: return "Exercise Ring"
+        case .stand_ring: return "Stand Ring"
+        case .all_rings_closed: return "All Rings Closed"
         }
     }
     
@@ -114,6 +122,10 @@ enum ChallengeMetric: String, Codable, CaseIterable {
         case .exercise_minutes: return "mins"
         case .flights: return "floors"
         case .workouts: return "workouts"
+        case .move_ring: return "kcal"
+        case .exercise_ring: return "mins"
+        case .stand_ring: return "hrs"
+        case .all_rings_closed: return "days"
         }
     }
     
@@ -125,6 +137,10 @@ enum ChallengeMetric: String, Codable, CaseIterable {
         case .exercise_minutes: return "clock.fill"
         case .flights: return "stairs"
         case .workouts: return "dumbbell.fill"
+        case .move_ring: return "circle.fill"
+        case .exercise_ring: return "circle.fill"
+        case .stand_ring: return "circle.fill"
+        case .all_rings_closed: return "circle.circle.fill"
         }
     }
 }

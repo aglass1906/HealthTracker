@@ -17,6 +17,10 @@ struct DailyStatUpload: Codable {
     let distance: Double
     let workouts_count: Int
     let exercise_minutes: Int
+    let move_ring_value: Double
+    let exercise_ring_value: Double
+    let stand_ring_value: Double
+    let all_rings_closed: Int
 }
 
 class SyncManager {
@@ -25,6 +29,14 @@ class SyncManager {
     private let authManager = AuthManager.shared
     
     private init() {}
+
+    private func allRingsClosed(_ rings: ActivityRings?) -> Int {
+        guard let rings else { return 0 }
+        let moveClosed = rings.move.goal > 0 && rings.move.value >= rings.move.goal
+        let exerciseClosed = rings.exercise.goal > 0 && rings.exercise.value >= rings.exercise.goal
+        let standClosed = rings.stand.goal > 0 && rings.stand.value >= rings.stand.goal
+        return moveClosed && exerciseClosed && standClosed ? 1 : 0
+    }
     
     func uploadDailyStats(data: DailyHealthData) async {
         guard let session = authManager.session else {
@@ -51,7 +63,11 @@ class SyncManager {
             flights: Int(data.flights),
             distance: data.distance ?? 0.0,
             workouts_count: data.workouts.count,
-            exercise_minutes: totalMinutes
+            exercise_minutes: totalMinutes,
+            move_ring_value: data.activityRings?.move.value ?? 0,
+            exercise_ring_value: data.activityRings?.exercise.value ?? 0,
+            stand_ring_value: data.activityRings?.stand.value ?? 0,
+            all_rings_closed: allRingsClosed(data.activityRings)
         )
         
         do {
@@ -101,7 +117,11 @@ class SyncManager {
                 flights: Int(data.flights),
                 distance: data.distance ?? 0.0,
                 workouts_count: data.workouts.count,
-                exercise_minutes: totalMinutes
+                exercise_minutes: totalMinutes,
+                move_ring_value: data.activityRings?.move.value ?? 0,
+                exercise_ring_value: data.activityRings?.exercise.value ?? 0,
+                stand_ring_value: data.activityRings?.stand.value ?? 0,
+                all_rings_closed: allRingsClosed(data.activityRings)
             )
         }
         
@@ -160,7 +180,11 @@ class SyncManager {
             flights: Int(data.flights),
             distance: data.distance ?? 0.0,
             workouts_count: data.workouts.count,
-            exercise_minutes: totalMinutes
+            exercise_minutes: totalMinutes,
+            move_ring_value: rings.move.value,
+            exercise_ring_value: rings.exercise.value,
+            stand_ring_value: rings.stand.value,
+            all_rings_closed: allRingsClosed(rings)
         )
 
         do {
