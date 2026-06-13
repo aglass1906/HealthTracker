@@ -58,10 +58,25 @@ struct MiniNutritionCard: View {
                             color: .orange
                         )
 
-                        HStack(spacing: 10) {
-                            miniNutrient("Protein", value: totals.protein_g, target: goal.protein_g, unit: "g", showsPercent: true)
-                            miniNutrient("Carbs", value: totals.carb_g, target: goal.carb_g, unit: "g", showsPercent: true)
-                            miniNutrient("Fat", value: totals.fat_g, target: goal.fat_g, unit: "g", showsPercent: true)
+                        HStack(spacing: 12) {
+                            DashboardNutritionMacroRing(
+                                title: "Protein",
+                                value: totals.protein_g,
+                                goal: goal.protein_g,
+                                color: .blue
+                            )
+                            DashboardNutritionMacroRing(
+                                title: "Carbs",
+                                value: totals.carb_g,
+                                goal: goal.carb_g,
+                                color: .orange
+                            )
+                            DashboardNutritionMacroRing(
+                                title: "Fat",
+                                value: totals.fat_g,
+                                goal: goal.fat_g,
+                                color: .purple
+                            )
                         }
 
                         HStack(spacing: 10) {
@@ -176,5 +191,58 @@ struct MiniNutritionCard: View {
     private func percentUsed(_ current: Double, _ target: Double) -> String {
         guard target > 0 else { return "--" }
         return "\(Int((100 * current / target).rounded()))%"
+    }
+}
+
+private struct DashboardNutritionMacroRing: View {
+    let title: String
+    let value: Double
+    let goal: Double
+    let color: Color
+
+    private var percentage: Double {
+        guard goal > 0 else { return 0 }
+        return value / goal
+    }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .stroke(color.opacity(0.2), lineWidth: 9)
+
+                Circle()
+                    .trim(from: 0, to: min(max(percentage, 0), 1))
+                    .stroke(color, style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+
+                Text(percentageText)
+                    .font(.caption.bold())
+                    .foregroundStyle(.primary)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(width: 64, height: 64)
+            .animation(.easeInOut, value: percentage)
+
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.primary)
+
+            Text("\(whole(value))/\(whole(goal))g")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var percentageText: String {
+        guard goal > 0 else { return "--" }
+        return "\(Int((percentage * 100).rounded()))%"
+    }
+
+    private func whole(_ number: Double) -> String {
+        number.formatted(.number.precision(.fractionLength(0)))
     }
 }

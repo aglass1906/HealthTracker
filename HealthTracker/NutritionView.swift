@@ -497,6 +497,17 @@ struct NutritionView: View {
                     macroChip("Sodium", value: Int(t.sodium.rounded()), unit: "mg")
                 }
             }
+            if selectedMainSection == .analysis, let goal = nutritionManager.activeGoal {
+                NutritionAnalysisMacroRings(
+                    protein: t.protein,
+                    proteinGoal: goal.protein_g,
+                    carbs: t.carbs,
+                    carbsGoal: goal.carb_g,
+                    fat: t.fat,
+                    fatGoal: goal.fat_g
+                )
+                .padding(.top, 4)
+            }
             if let pp = pct.protein, let pc = pct.carbs, let pf = pct.fat {
                 Text(String(format: "Macro %% of kcal · P %.0f%% · C %.0f%% · F %.0f%%", pp, pc, pf))
                     .font(.caption)
@@ -669,6 +680,90 @@ struct NutritionView: View {
         case .sugar: return item.sugarGramsFromNutrients
         case .sodium: return item.sodium_mg ?? 0
         }
+    }
+}
+
+private struct NutritionAnalysisMacroRings: View {
+    let protein: Double
+    let proteinGoal: Double
+    let carbs: Double
+    let carbsGoal: Double
+    let fat: Double
+    let fatGoal: Double
+
+    var body: some View {
+        HStack(spacing: 12) {
+            NutritionAnalysisMacroRing(
+                title: "Protein",
+                value: protein,
+                goal: proteinGoal,
+                color: .blue
+            )
+            NutritionAnalysisMacroRing(
+                title: "Carbs",
+                value: carbs,
+                goal: carbsGoal,
+                color: .orange
+            )
+            NutritionAnalysisMacroRing(
+                title: "Fat",
+                value: fat,
+                goal: fatGoal,
+                color: .purple
+            )
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct NutritionAnalysisMacroRing: View {
+    let title: String
+    let value: Double
+    let goal: Double
+    let color: Color
+
+    private var percentage: Double {
+        guard goal > 0 else { return 0 }
+        return value / goal
+    }
+
+    var body: some View {
+        VStack(spacing: 7) {
+            ZStack {
+                Circle()
+                    .stroke(color.opacity(0.2), lineWidth: 10)
+
+                Circle()
+                    .trim(from: 0, to: min(max(percentage, 0), 1))
+                    .stroke(color, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+
+                Text(percentageText)
+                    .font(.subheadline.bold())
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(width: 72, height: 72)
+            .animation(.easeInOut, value: percentage)
+
+            Text(title)
+                .font(.caption.weight(.semibold))
+
+            Text("\(whole(value))/\(whole(goal))g")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var percentageText: String {
+        guard goal > 0 else { return "--" }
+        return "\(Int((percentage * 100).rounded()))%"
+    }
+
+    private func whole(_ number: Double) -> String {
+        number.formatted(.number.precision(.fractionLength(0)))
     }
 }
 
