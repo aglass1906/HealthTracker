@@ -234,8 +234,9 @@ struct CommunityView: View {
                         
                         Picker("View", selection: $communityTab) {
                             Text("Feed").tag(0)
-                            Text("Leaderboard").tag(1)
+                            Text("Leaders").tag(1)
                             Text("Challenges").tag(2)
+                            Text("Members").tag(3)
                         }
                         .pickerStyle(.segmented)
                         .padding()
@@ -249,6 +250,12 @@ struct CommunityView: View {
                             
                             ChallengesListView(familyId: family.id)
                                 .tag(2)
+
+                            CommunityMembersView(
+                                family: family,
+                                members: viewModel.members
+                            )
+                            .tag(3)
                         }
                         .tabViewStyle(.page(indexDisplayMode: .never))
                     }
