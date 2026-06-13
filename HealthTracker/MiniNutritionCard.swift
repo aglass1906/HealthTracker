@@ -23,7 +23,7 @@ struct MiniNutritionCard: View {
                             .foregroundStyle(.primary)
 
                         if let goal = nutritionManager.activeGoal {
-                            Text(targetText(current: totals.calories, target: goal.daily_calories, unit: "kcal"))
+                            Text(goal.goal_type.displayName)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         } else if totals.calories > 0 {

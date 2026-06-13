@@ -13,42 +13,65 @@ struct MiniActivityCard: View {
             myDataReferenceDate = Date()
             selectedTab = 1 // My Data Tab
         } label: {
-            HStack(spacing: 16) {
-                // Mini Rings
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    Image(systemName: "figure.run.circle.fill")
+                        .font(.system(size: 42))
+                        .foregroundStyle(.orange)
+                        .frame(width: 44, height: 44)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Your Activity Today")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+
+                        if let steps = dataStore.todayData?.steps {
+                            Text("\(Int(steps).formatted()) steps")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("No data yet")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.secondary)
+                }
+
                 if let rings = dataStore.todayData?.activityRings {
-                    ZStack {
-                        RingViewMock(progress: rings.move.progress, color: .red, size: 40, width: 4)
-                        RingViewMock(progress: rings.exercise.progress, color: .green, size: 28, width: 4)
-                        RingViewMock(progress: rings.stand.progress, color: .blue, size: 16, width: 4)
+                    HStack(spacing: 12) {
+                        ActivityDashboardRing(
+                            title: "Move",
+                            ring: rings.move,
+                            unit: "kcal",
+                            color: .red
+                        )
+                        ActivityDashboardRing(
+                            title: "Exercise",
+                            ring: rings.exercise,
+                            unit: "min",
+                            color: .green
+                        )
+                        ActivityDashboardRing(
+                            title: "Stand",
+                            ring: rings.stand,
+                            unit: "hrs",
+                            color: .blue
+                        )
                     }
-                    .frame(width: 40, height: 40)
                 } else {
-                    Circle()
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(width: 40, height: 40)
+                    Text("Activity rings will appear after HealthKit syncs today's data.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Your Activity Today")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    
-                    if let steps = dataStore.todayData?.steps {
-                        Text("\(Int(steps)) steps")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("No data yet")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                
-                Spacer()
-                
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(.secondary)
             }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color(.systemBackground))
@@ -60,6 +83,59 @@ struct MiniActivityCard: View {
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct ActivityDashboardRing: View {
+    let title: String
+    let ring: RingData
+    let unit: String
+    let color: Color
+
+    private var percentage: Double {
+        guard ring.goal > 0 else { return 0 }
+        return ring.value / ring.goal
+    }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .stroke(color.opacity(0.2), lineWidth: 9)
+
+                Circle()
+                    .trim(from: 0, to: min(max(percentage, 0), 1))
+                    .stroke(color, style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+
+                Text(percentageText)
+                    .font(.caption.bold())
+                    .foregroundStyle(.primary)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(width: 64, height: 64)
+            .animation(.easeInOut, value: percentage)
+
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.primary)
+
+            Text("\(whole(ring.value))/\(whole(ring.goal)) \(unit)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var percentageText: String {
+        guard ring.goal > 0 else { return "--" }
+        return "\(Int((percentage * 100).rounded()))%"
+    }
+
+    private func whole(_ number: Double) -> String {
+        number.formatted(.number.precision(.fractionLength(0)))
     }
 }
 
