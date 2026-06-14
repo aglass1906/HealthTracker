@@ -1,20 +1,26 @@
-//
-//  ChallengeViewModel.swift
-//  HealthTracker
-//
-//  Created by Alan Glass on 2/4/26.
-//
-
 import Foundation
 import Supabase
 import Combine
 
 struct ChallengeParticipant: Identifiable {
-    let id: UUID // user_id
+    let id: UUID
     let profile: Profile
-    let value: Double // aggregated value (steps, calories, etc)
-    var progress: Double // 0.0 to 1.0
+    let value: Double
+    var progress: Double
     var rank: Int = 0
+}
+
+struct MetricLeaderboard: Identifiable {
+    var id: ChallengeMetric { metric }
+    let metric: ChallengeMetric
+    let participants: [ChallengeParticipant]
+}
+
+struct ChallengeStanding: Identifiable {
+    var id: UUID { profile.id }
+    let profile: Profile
+    let wins: Int
+    var rank: Int
 }
 
 struct DailyStatDB: Codable {
@@ -24,7 +30,7 @@ struct DailyStatDB: Codable {
     let calories: Int
     let flights: Int
     let distance: Double
-    let workouts_count: Int? 
+    let workouts_count: Int?
     let exercise_minutes: Int?
     let move_ring_value: Double?
     let exercise_ring_value: Double?
@@ -32,132 +38,285 @@ struct DailyStatDB: Codable {
     let all_rings_closed: Int?
 }
 
-class ChallengeViewModel: ObservableObject {
+final class ChallengeViewModel: ObservableObject {
     @Published var activeChallenges: [Challenge] = []
-    @Published var participants: [ChallengeParticipant] = [] // For the selected challenge
+    @Published var participants: [ChallengeParticipant] = []
     @Published var creatorName: String?
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var rounds: [ChallengeRound] = []
     @Published var currentRoundParticipants: [RoundParticipant] = []
-    @Published var roundWinCounts: [UUID: Int] = [:] // user_id -> win count
+    @Published var roundWinCounts: [UUID: Int] = [:]
     @Published var currentRoundStats: [ChallengeParticipant] = []
-    
+    @Published var challengeMetrics: [ChallengeMetric] = []
+    @Published var metricLeaderboards: [MetricLeaderboard] = []
+    @Published var currentRoundLeaderboards: [MetricLeaderboard] = []
+    @Published var overallStandings: [ChallengeStanding] = []
+    @Published var metricWinners: [ChallengeMetricWinner] = []
+
     @Published var selectedFilter: ChallengeFilter = .all
-    
+
     enum ChallengeFilter: String, CaseIterable, Identifiable {
         case all = "All"
         case active = "Active"
         case recent = "Recent"
         case ended = "Ended"
-        
+
         var id: String { rawValue }
     }
-    
+
+    private struct ChallengeInsert: Encodable {
+        let family_id: UUID
+        let creator_id: UUID
+        let title: String
+        let type: ChallengeType
+        let metric: ChallengeMetric
+        let target_value: Int
+        let start_date: String
+        let end_date: String?
+        let status: ChallengeStatus
+        let round_duration: String?
+        let current_round_number: Int?
+    }
+
+    private struct ChallengeUpdate: Encodable {
+        let title: String
+        let metric: ChallengeMetric
+        let target_value: Int
+        let start_date: String
+        let end_date: String?
+    }
+
+    private struct ChallengeMetricInsert: Encodable {
+        let challenge_id: UUID
+        let metric: ChallengeMetric
+        let display_order: Int
+    }
+
+    private struct ChallengeMetricWinnerInsert: Encodable {
+        let challenge_id: UUID
+        let round_id: UUID?
+        let metric: ChallengeMetric
+        let user_id: UUID
+        let value: Double
+    }
+
+    private let client = AuthManager.shared.client
+
     var filteredChallenges: [Challenge] {
-        let now = Date()
-        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: now)!
-        
-        // Helper to categorize
-        func isRecent(_ challenge: Challenge) -> Bool {
-            guard let endDate = challenge.end_date else { return false } // No end date = active forever?
-            return challenge.isEnded && endDate >= sevenDaysAgo
-        }
-        
-        func isActive(_ challenge: Challenge) -> Bool {
-            return !challenge.isEnded
-        }
-        
-        func isEndedLegacy(_ challenge: Challenge) -> Bool {
-            guard let endDate = challenge.end_date else { return false }
-            return challenge.isEnded && endDate < sevenDaysAgo
-        }
-        
+        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
         let filtered: [Challenge]
-        
+
         switch selectedFilter {
         case .all:
             filtered = activeChallenges
         case .active:
-            filtered = activeChallenges.filter { isActive($0) }
+            filtered = activeChallenges.filter { !$0.isEnded }
         case .recent:
-            filtered = activeChallenges.filter { isRecent($0) }
+            filtered = activeChallenges.filter {
+                guard let endDate = $0.end_date else { return false }
+                return $0.isEnded && endDate >= sevenDaysAgo
+            }
         case .ended:
-            filtered = activeChallenges.filter { isEndedLegacy($0) }
-        }
-        
-        // Sort: Active (end asc) -> Recent (end desc) -> Ended (end desc)
-        return filtered.sorted { c1, c2 in
-            // 1. Primary Sort: Category (Active < Recent < Ended)
-            let score1 = score(c1)
-            let score2 = score(c2)
-            
-            if score1 != score2 {
-                return score1 < score2
-            }
-            
-            // 2. Secondary Sort: Date
-            let end1 = c1.end_date ?? Date.distantFuture
-            let end2 = c2.end_date ?? Date.distantFuture
-            
-            if !c1.isEnded {
-                // Active: Ending soonest first
-                return end1 < end2
-            } else {
-                // Ended/Recent: Most recently ended first
-                return end1 > end2
+            filtered = activeChallenges.filter {
+                guard let endDate = $0.end_date else { return false }
+                return $0.isEnded && endDate < sevenDaysAgo
             }
         }
-    }
-    
-    private func score(_ challenge: Challenge) -> Int {
-        let now = Date()
-        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: now)!
-        
-        if !challenge.isEnded {
-            return 0 // Active
-        } else if let endDate = challenge.end_date, endDate >= sevenDaysAgo {
-            return 1 // Recent
-        } else {
-            return 2 // Ended
+
+        return filtered.sorted {
+            if $0.isEnded != $1.isEnded {
+                return !$0.isEnded
+            }
+            let firstEnd = $0.end_date ?? .distantFuture
+            let secondEnd = $1.end_date ?? .distantFuture
+            return $0.isEnded ? firstEnd > secondEnd : firstEnd < secondEnd
         }
     }
 
-    
-    let client = AuthManager.shared.client
+    // MARK: - Metrics and scoring
+
+    func fetchMetrics(for challenge: Challenge) async -> [ChallengeMetric] {
+        do {
+            let records: [ChallengeMetricRecord] = try await client
+                .from("challenge_metrics")
+                .select()
+                .eq("challenge_id", value: challenge.id)
+                .order("display_order")
+                .execute()
+                .value
+            return records.isEmpty ? [challenge.metric] : records.map(\.metric)
+        } catch {
+            print("Fetch challenge metrics error: \(error)")
+            return [challenge.metric]
+        }
+    }
 
     private func aggregateValue(for metric: ChallengeMetric, stats: [DailyStatDB]) -> Double {
+        stats.reduce(0) { $0 + dailyValue(for: metric, stat: $1) }
+    }
+
+    private func dailyValue(for metric: ChallengeMetric, stat: DailyStatDB) -> Double {
         switch metric {
-        case .steps:
-            return Double(stats.reduce(0) { $0 + $1.steps })
-        case .calories:
-            return Double(stats.reduce(0) { $0 + $1.calories })
-        case .distance:
-            return stats.reduce(0) { $0 + $1.distance }
-        case .exercise_minutes:
-            return Double(stats.reduce(into: 0) { $0 += ($1.exercise_minutes ?? 0) })
-        case .flights:
-            return Double(stats.reduce(0) { $0 + $1.flights })
-        case .workouts:
-            return Double(stats.reduce(into: 0) { $0 += ($1.workouts_count ?? 0) })
-        case .move_ring:
-            return stats.reduce(0) { $0 + ($1.move_ring_value ?? 0) }
-        case .exercise_ring:
-            return stats.reduce(0) { $0 + ($1.exercise_ring_value ?? 0) }
-        case .stand_ring:
-            return stats.reduce(0) { $0 + ($1.stand_ring_value ?? 0) }
-        case .all_rings_closed:
-            return Double(stats.reduce(0) { $0 + ($1.all_rings_closed ?? 0) })
+        case .steps: return Double(stat.steps)
+        case .calories: return Double(stat.calories)
+        case .distance: return stat.distance
+        case .exercise_minutes: return Double(stat.exercise_minutes ?? 0)
+        case .flights: return Double(stat.flights)
+        case .workouts: return Double(stat.workouts_count ?? 0)
+        case .move_ring: return stat.move_ring_value ?? 0
+        case .exercise_ring: return stat.exercise_ring_value ?? 0
+        case .stand_ring: return stat.stand_ring_value ?? 0
+        case .all_rings_closed: return Double(stat.all_rings_closed ?? 0)
         }
     }
-    
-    // MARK: - Fetch Challenges
-    
+
+    private func longestStreak(metric: ChallengeMetric, target: Int, stats: [DailyStatDB]) -> Double {
+        let qualifyingDates = Set(stats.compactMap { stat -> Date? in
+            guard dailyValue(for: metric, stat: stat) >= Double(target) else { return nil }
+            return Self.dayFormatter.date(from: stat.date)
+        })
+        guard !qualifyingDates.isEmpty else { return 0 }
+
+        let sortedDates = qualifyingDates.sorted()
+        var longest = 1
+        var current = 1
+
+        for index in 1..<sortedDates.count {
+            let days = Calendar.current.dateComponents(
+                [.day],
+                from: Calendar.current.startOfDay(for: sortedDates[index - 1]),
+                to: Calendar.current.startOfDay(for: sortedDates[index])
+            ).day
+            if days == 1 {
+                current += 1
+                longest = max(longest, current)
+            } else {
+                current = 1
+            }
+        }
+        return Double(longest)
+    }
+
+    private func buildLeaderboards(
+        metrics: [ChallengeMetric],
+        type: ChallengeType,
+        target: Int,
+        profiles: [Profile],
+        stats: [DailyStatDB]
+    ) -> [MetricLeaderboard] {
+        metrics.map { metric in
+            var metricParticipants = profiles.map { profile -> ChallengeParticipant in
+                let userStats = stats.filter { $0.user_id == profile.id }
+                let value = type == .streak
+                    ? longestStreak(metric: metric, target: target, stats: userStats)
+                    : aggregateValue(for: metric, stats: userStats)
+                return ChallengeParticipant(id: profile.id, profile: profile, value: value, progress: 0)
+            }
+
+            metricParticipants.sort {
+                if $0.value == $1.value {
+                    return ($0.profile.display_name ?? "") < ($1.profile.display_name ?? "")
+                }
+                return $0.value > $1.value
+            }
+
+            let maxValue = metricParticipants.first?.value ?? 0
+            var previousValue: Double?
+            var previousRank = 0
+            for index in metricParticipants.indices {
+                let rank = previousValue == metricParticipants[index].value ? previousRank : index + 1
+                metricParticipants[index].rank = rank
+                previousValue = metricParticipants[index].value
+                previousRank = rank
+
+                if type == .race {
+                    metricParticipants[index].progress = target > 0
+                        ? metricParticipants[index].value / Double(target)
+                        : 0
+                } else {
+                    metricParticipants[index].progress = maxValue > 0
+                        ? metricParticipants[index].value / maxValue
+                        : 0
+                }
+            }
+            return MetricLeaderboard(metric: metric, participants: metricParticipants)
+        }
+    }
+
+    private func standings(
+        profiles: [Profile],
+        winners: [ChallengeMetricWinner],
+        liveLeaderboards: [MetricLeaderboard] = []
+    ) -> [ChallengeStanding] {
+        var winCounts: [UUID: Int] = [:]
+
+        if winners.isEmpty {
+            for leaderboard in liveLeaderboards {
+                guard let topValue = leaderboard.participants.first?.value, topValue > 0 else { continue }
+                for participant in leaderboard.participants where participant.value == topValue {
+                    winCounts[participant.id, default: 0] += 1
+                }
+            }
+        } else {
+            for winner in winners {
+                winCounts[winner.user_id, default: 0] += 1
+            }
+        }
+
+        var result = profiles.map {
+            ChallengeStanding(profile: $0, wins: winCounts[$0.id, default: 0], rank: 0)
+        }
+        result.sort {
+            if $0.wins == $1.wins {
+                return ($0.profile.display_name ?? "") < ($1.profile.display_name ?? "")
+            }
+            return $0.wins > $1.wins
+        }
+
+        var previousWins: Int?
+        var previousRank = 0
+        for index in result.indices {
+            let rank = previousWins == result[index].wins ? previousRank : index + 1
+            result[index].rank = rank
+            previousWins = result[index].wins
+            previousRank = rank
+        }
+        return result
+    }
+
+    private func fetchStats(userIds: [UUID], start: Date, end: Date) async throws -> [DailyStatDB] {
+        guard !userIds.isEmpty else { return [] }
+        return try await client
+            .from("daily_stats")
+            .select()
+            .in("user_id", values: userIds)
+            .gte("date", value: Self.dayFormatter.string(from: start))
+            .lte("date", value: Self.dayFormatter.string(from: end))
+            .execute()
+            .value
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        return formatter
+    }()
+
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    // MARK: - Fetch and create
+
     func fetchActiveChallenges(for familyId: UUID) async {
         isLoading = true
         errorMessage = nil
-        activeChallenges = []
-        
         do {
             let challenges: [Challenge] = try await client
                 .from("challenges")
@@ -166,169 +325,77 @@ class ChallengeViewModel: ObservableObject {
                 .order("created_at", ascending: false)
                 .execute()
                 .value
-            
-            self.activeChallenges = challenges
-            
-            // Check for challenge completions
-            for challenge in challenges {
+            activeChallenges = challenges
+            for challenge in challenges where challenge.status != .completed {
                 await checkChallengeCompletion(for: challenge)
             }
         } catch {
             print("Fetch challenges error: \(error)")
-            // errorMessage = "Failed to load challenges" // Optional: show error to user
+            errorMessage = "Failed to load challenges."
         }
-        
         isLoading = false
     }
-    
-    // MARK: - Create Challenge
-    
-    func createChallenge(familyId: UUID, title: String, type: ChallengeType, metric: ChallengeMetric, target: Int, startDate: Date, endDate: Date?, roundDuration: RoundDuration? = nil) async -> Bool {
-        guard let userId = AuthManager.shared.session?.user.id else { return false }
-        
-        // Supabase requires dates in ISO8601 string or Date object depending on SDK
-        // The SDK handles Date encoding usually.
-        
-        struct ChallengeInsert: Encodable {
-            let family_id: UUID
-            let creator_id: UUID
-            let title: String
-            let type: ChallengeType
-            let metric: ChallengeMetric
-            let target_value: Int
-            let start_date: String
-            let end_date: String?
-            let status: ChallengeStatus
-            let round_duration: String?
-            let current_round_number: Int?
+
+    func createChallenge(
+        familyId: UUID,
+        title: String,
+        type: ChallengeType,
+        metrics: [ChallengeMetric],
+        target: Int,
+        startDate: Date,
+        endDate: Date?,
+        roundDuration: RoundDuration? = nil
+    ) async -> Bool {
+        guard let userId = AuthManager.shared.session?.user.id, let primaryMetric = metrics.first else {
+            return false
         }
-        
-        
-        // Format dates to ISO8601
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
-        let startString = formatter.string(from: startDate)
-        let endString = endDate.map { formatter.string(from: $0) }
-        
-        let newChallenge = ChallengeInsert(
+        let selectedMetrics = type == .count ? metrics : [primaryMetric]
+        let insert = ChallengeInsert(
             family_id: familyId,
             creator_id: userId,
             title: title,
             type: type,
-            metric: metric,
+            metric: primaryMetric,
             target_value: target,
-            start_date: startString,
-            end_date: endString,
+            start_date: Self.isoFormatter.string(from: startDate),
+            end_date: endDate.map(Self.isoFormatter.string),
             status: .active,
             round_duration: roundDuration?.rawValue,
-            current_round_number: roundDuration != nil ? 1 : nil
+            current_round_number: roundDuration == nil ? nil : 1
         )
-        
+
         do {
-            let createdChallenges: [Challenge] = try await client
+            let created: [Challenge] = try await client
                 .from("challenges")
-                .insert(newChallenge)
+                .insert(insert)
                 .select()
                 .execute()
                 .value
-            
-            // If rounds enabled, create all rounds upfront
-            if let roundDur = roundDuration, let challenge = createdChallenges.first {
-                let calendar = Calendar.current
-                let startOfFirstRound = calendar.startOfDay(for: startDate)
-                var currentRoundStart = startOfFirstRound
-                var roundNum = 1
-                
-                // Create all rounds upfront based on challenge duration
-                let challengeEnd = endDate ?? calendar.date(byAdding: .day, value: 1, to: startDate)!
-                while currentRoundStart < challengeEnd {
-                    var roundEnd: Date
-                    
-                    switch roundDur {
-                    case .daily:
-                        // End of the same day (23:59:59)
-                        roundEnd = calendar.date(byAdding: .day, value: 1, to: currentRoundStart)!.addingTimeInterval(-1)
-                    case .weekly:
-                        roundEnd = calendar.date(byAdding: .weekOfYear, value: 1, to: currentRoundStart)!.addingTimeInterval(-1)
-                    case .monthly:
-                        roundEnd = calendar.date(byAdding: .month, value: 1, to: currentRoundStart)!.addingTimeInterval(-1)
-                    }
-                    
-                    // Clamp round end to challenge end if needed
-                    if roundEnd > challengeEnd {
-                        roundEnd = challengeEnd
-                    }
-                    
-                    // Determine status based on current date
-                    let now = Date()
-                    let status: String
-                    if now < currentRoundStart {
-                        status = "pending"
-                    } else if now > roundEnd {
-                        status = "completed"
-                    } else {
-                        status = "active"
-                    }
-                    
-                    let round = ChallengeRoundInsert(
-                        challenge_id: challenge.id,
-                        round_number: roundNum,
-                        start_date: formatter.string(from: currentRoundStart),
-                        end_date: formatter.string(from: roundEnd),
-                        status: status
-                    )
-                    
-                    try await client
-                        .from("challenge_rounds")
-                        .insert(round)
-                        .execute()
-                    
-                    // Move to next round
-                    switch roundDur {
-                    case .daily:
-                        currentRoundStart = calendar.date(byAdding: .day, value: 1, to: currentRoundStart)!
-                    case .weekly:
-                        currentRoundStart = calendar.date(byAdding: .weekOfYear, value: 1, to: currentRoundStart)!
-                    case .monthly:
-                        currentRoundStart = calendar.date(byAdding: .month, value: 1, to: currentRoundStart)!
-                    }
-                    
-                    roundNum += 1
-                    
-                    // Safety check to prevent infinite loops
-                    if roundNum > 1000 {
-                        print("Warning: Too many rounds generated, breaking loop")
-                        break
-                    }
-                }
+            guard let challenge = created.first else { return false }
+
+            try await insertMetrics(selectedMetrics, challengeId: challenge.id)
+            if let roundDuration {
+                try await createRounds(
+                    challengeId: challenge.id,
+                    duration: roundDuration,
+                    startDate: startDate,
+                    endDate: endDate ?? startDate
+                )
             }
-            
-            // Refresh list
+
+            let metricNames = selectedMetrics.map(\.displayName).joined(separator: ", ")
+            let goal = type == .count ? "Most \(metricNames)" : "\(target) \(primaryMetric.unit)"
+            await SocialFeedManager.shared.post(
+                type: .challenge_created,
+                familyId: familyId,
+                payload: [
+                    "title": title,
+                    "metric": metricNames,
+                    "goal": goal,
+                    "challenge_id": challenge.id.uuidString
+                ]
+            )
             await fetchActiveChallenges(for: familyId)
-            
-            // Post to Feed
-            if let challenge = createdChallenges.first {
-                Task {
-                    var goalText = "\(target) \(metric.unit)"
-                    if type == .count {
-                        if let endDate = endDate {
-                            goalText = "Most \(metric.displayName) by \(endDate.formatted(date: .abbreviated, time: .omitted))"
-                        } else {
-                            goalText = "Most \(metric.displayName)"
-                        }
-                    }
-                    
-                    let payload: [String: String] = [
-                        "title": title,
-                        "metric": metric.displayName,
-                        "goal": goalText,
-                        "challenge_id": challenge.id.uuidString
-                    ]
-                    await SocialFeedManager.shared.post(type: .challenge_created, familyId: familyId, payload: payload)
-                }
-            }
-            
             return true
         } catch {
             print("Create challenge error: \(error)")
@@ -336,257 +403,163 @@ class ChallengeViewModel: ObservableObject {
             return false
         }
     }
-    
-    // MARK: - Calculate Progress (The "Race" Logic)
-    
+
+    private func insertMetrics(_ metrics: [ChallengeMetric], challengeId: UUID) async throws {
+        let inserts = metrics.enumerated().map {
+            ChallengeMetricInsert(challenge_id: challengeId, metric: $0.element, display_order: $0.offset)
+        }
+        try await client.from("challenge_metrics").insert(inserts).execute()
+    }
+
+    private func createRounds(
+        challengeId: UUID,
+        duration: RoundDuration,
+        startDate: Date,
+        endDate: Date
+    ) async throws {
+        let calendar = Calendar.current
+        var roundStart = calendar.startOfDay(for: startDate)
+        var roundNumber = 1
+
+        while roundStart < endDate, roundNumber <= 1000 {
+            let nextStart: Date
+            switch duration {
+            case .daily:
+                nextStart = calendar.date(byAdding: .day, value: 1, to: roundStart)!
+            case .weekly:
+                nextStart = calendar.date(byAdding: .weekOfYear, value: 1, to: roundStart)!
+            case .monthly:
+                nextStart = calendar.date(byAdding: .month, value: 1, to: roundStart)!
+            }
+            let roundEnd = min(nextStart.addingTimeInterval(-1), endDate)
+            let status = Date() < roundStart ? "pending" : "active"
+            let insert = ChallengeRoundInsert(
+                challenge_id: challengeId,
+                round_number: roundNumber,
+                start_date: Self.isoFormatter.string(from: roundStart),
+                end_date: Self.isoFormatter.string(from: roundEnd),
+                status: status
+            )
+            try await client.from("challenge_rounds").insert(insert).execute()
+            roundStart = nextStart
+            roundNumber += 1
+        }
+    }
+
+    // MARK: - Progress
+
     func loadProgress(for challenge: Challenge) async {
         isLoading = true
-        participants = []
-        creatorName = nil
-        
         do {
-            // 1. Get community profiles
             let profiles = await CommunityMembershipManager.shared.fetchMembers(for: challenge.family_id)
-            
-            // Set Creator Name
-            if let creator = profiles.first(where: { $0.id == challenge.creator_id }) {
-                self.creatorName = creator.display_name ?? creator.email
-            }
-            
-            let userIds = profiles.map { $0.id }
-            
-            // 2. Get stats since start_date
-            // Format start_date to YYYY-MM-DD
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            formatter.calendar = Calendar.current
-            formatter.timeZone = TimeZone.current
-            
-            let startString = formatter.string(from: challenge.start_date)
-            
-            // Determine effective end date (min of now or challenge end)
-            let now = Date()
-            let effectiveEndDate: Date
-            if let challengeEnd = challenge.end_date {
-                effectiveEndDate = min(now, challengeEnd)
-            } else {
-                effectiveEndDate = now
-            }
-            let endString = formatter.string(from: effectiveEndDate)
-            
-            // Note: Schema checks. 'daily_stats' has steps, calories, distance.
-            // It might NOT have 'exercise_minutes' column yet unless we verify.
-            // If metric is exercise_minutes, we might fail if column doesn't exist.
-            // Assuming we stick to Steps/Calories for V1 safety or verify column later.
-            
-            let stats: [DailyStatDB] = try await client
-                .from("daily_stats")
+            creatorName = profiles.first(where: { $0.id == challenge.creator_id })?.display_name
+            let metrics = await fetchMetrics(for: challenge)
+            challengeMetrics = metrics
+            let end = min(Date(), challenge.end_date ?? Date())
+            let stats = try await fetchStats(
+                userIds: profiles.map(\.id),
+                start: challenge.start_date,
+                end: end
+            )
+            let leaderboards = buildLeaderboards(
+                metrics: challenge.type == .count ? metrics : [challenge.metric],
+                type: challenge.type,
+                target: challenge.target_value,
+                profiles: profiles,
+                stats: stats
+            )
+            metricLeaderboards = leaderboards
+            participants = leaderboards.first?.participants ?? []
+
+            let storedWinners: [ChallengeMetricWinner] = try await client
+                .from("challenge_metric_winners")
                 .select()
-                .in("user_id", values: userIds)
-                .gte("date", value: startString)
-                .lte("date", value: endString)
+                .eq("challenge_id", value: challenge.id)
+                .is("round_id", value: nil)
                 .execute()
                 .value
-            
-            // 3. Aggregate
-            var tempParticipants: [ChallengeParticipant] = []
-            
-            for profile in profiles {
-                let userStats = stats.filter { $0.user_id == profile.id }
-                
-                let totalValue = aggregateValue(for: challenge.metric, stats: userStats)
-                
-                let progress: Double
-                
-                if challenge.type == .count {
-                    // For count/leaderboard, progress is relative to the LEADER (max value), 
-                    // calculated after we have all values.
-                    progress = 0 // Placeholder
-                } else {
-                    progress = totalValue / Double(challenge.target_value)
-                }
-                
-                tempParticipants.append(ChallengeParticipant(
-                    id: profile.id,
-                    profile: profile,
-                    value: totalValue,
-                    progress: progress
-                ))
+            metricWinners = storedWinners
+            overallStandings = standings(
+                profiles: profiles,
+                winners: storedWinners,
+                liveLeaderboards: leaderboards
+            )
+
+            if challenge.type == .race,
+               leaderboards.first?.participants.first?.value ?? 0 >= Double(challenge.target_value) {
+                await checkChallengeCompletion(for: challenge)
+            } else if challenge.isEnded {
+                await checkChallengeCompletion(for: challenge)
             }
-            
-            // 4. Rank
-            tempParticipants.sort { $0.value > $1.value }
-            
-            // Assign ranks & Fix Progress for .count
-            let maxValue = tempParticipants.first?.value ?? 1
-            
-            for i in 0..<tempParticipants.count {
-                tempParticipants[i].rank = i + 1
-                
-                if challenge.type == .count {
-                    if maxValue > 0 {
-                        tempParticipants[i].progress = tempParticipants[i].value / maxValue
-                    } else {
-                        tempParticipants[i].progress = 0
-                    }
-                }
-                
-                // For other types, we might want to cap at 1.0 or let it go over?
-                // Typically progress bars clamp to 1.0 visually, but data can be > 1.0
-            }
-            
-            self.participants = tempParticipants
-            
-            // 5. Check for Race Completion
-            if let leader = tempParticipants.first {
-                if challenge.type == .race && leader.value >= Double(challenge.target_value) {
-                    // Race finished!
-                    await checkChallengeCompletion(for: challenge)
-                } else if challenge.isEnded {
-                    // Challenge ended naturally
-                     await checkChallengeCompletion(for: challenge)
-                }
-            }
-            
         } catch {
             print("Load progress error: \(error)")
+            errorMessage = "Failed to load challenge progress."
         }
-        
         isLoading = false
     }
-    
-    // MARK: - Edit/Delete Challenge
-    
-    func updateChallenge(challenge: Challenge, title: String, target: Int, startDate: Date, endDate: Date?, notifyFeed: Bool) async -> Bool {
-        guard let userId = AuthManager.shared.session?.user.id, userId == challenge.creator_id else { return false }
-        
-        struct ChallengeUpdate: Encodable {
-            let title: String
-            let target_value: Int
-            let start_date: String
-            let end_date: String?
-        }
-        
-        // Format dates to ISO8601
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
-        let startString = formatter.string(from: startDate)
-        let endString = endDate.map { formatter.string(from: $0) }
-        
-        let updateData = ChallengeUpdate(
+
+    // MARK: - Edit and delete
+
+    func updateChallenge(
+        challenge: Challenge,
+        title: String,
+        metrics: [ChallengeMetric],
+        target: Int,
+        startDate: Date,
+        endDate: Date?,
+        notifyFeed: Bool
+    ) async -> Bool {
+        guard AuthManager.shared.session?.user.id == challenge.creator_id,
+              challenge.finalized_at == nil,
+              let primaryMetric = metrics.first else { return false }
+        let selectedMetrics = challenge.type == .count ? metrics : [primaryMetric]
+        let update = ChallengeUpdate(
             title: title,
+            metric: primaryMetric,
             target_value: target,
-            start_date: startString,
-            end_date: endString
+            start_date: Self.isoFormatter.string(from: startDate),
+            end_date: endDate.map(Self.isoFormatter.string)
         )
-        
+
         do {
-            try await client
-                .from("challenges")
-                .update(updateData)
-                .eq("id", value: challenge.id)
-                .execute()
-            
-            // If this is a round-based challenge and end date changed, create missing rounds
-            if let roundDur = challenge.roundDuration, let newEndDate = endDate {
-                // Get existing rounds
-                let existingRounds: [ChallengeRound] = try await client
+            try await client.from("challenges").update(update).eq("id", value: challenge.id).execute()
+            try await client.from("challenge_metrics").delete().eq("challenge_id", value: challenge.id).execute()
+            try await insertMetrics(selectedMetrics, challengeId: challenge.id)
+
+            if let duration = challenge.roundDuration,
+               let endDate,
+               endDate > (challenge.end_date ?? challenge.start_date) {
+                let existing: [ChallengeRound] = try await client
                     .from("challenge_rounds")
                     .select()
                     .eq("challenge_id", value: challenge.id)
                     .order("round_number", ascending: false)
                     .execute()
                     .value
-                
-                let calendar = Calendar.current
-                let oldEndDate = challenge.end_date ?? challenge.start_date
-                
-                // Only create new rounds if end date was extended
-                if newEndDate > oldEndDate, let lastRound = existingRounds.first {
-                    var nextRoundNumber = lastRound.round_number + 1
-                    var currentRoundStart = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: lastRound.end_date))!
-                    
-                    // Create rounds until we reach the new end date
-                    while currentRoundStart < newEndDate {
-                        var roundEnd: Date
-                        
-                        switch roundDur {
-                        case .daily:
-                            roundEnd = calendar.date(byAdding: .day, value: 1, to: currentRoundStart)!.addingTimeInterval(-1)
-                        case .weekly:
-                            roundEnd = calendar.date(byAdding: .weekOfYear, value: 1, to: currentRoundStart)!.addingTimeInterval(-1)
-                        case .monthly:
-                            roundEnd = calendar.date(byAdding: .month, value: 1, to: currentRoundStart)!.addingTimeInterval(-1)
-                        }
-                        
-                        if roundEnd > newEndDate {
-                            roundEnd = newEndDate
-                        }
-                        
-                        // Determine status
-                        let now = Date()
-                        let status: String
-                        if now < currentRoundStart {
-                            status = "pending"
-                        } else if now > roundEnd {
-                            status = "completed"
-                        } else {
-                            status = "active"
-                        }
-                        
-                        let newRound = ChallengeRoundInsert(
-                            challenge_id: challenge.id,
-                            round_number: nextRoundNumber,
-                            start_date: formatter.string(from: currentRoundStart),
-                            end_date: formatter.string(from: roundEnd),
-                            status: status
-                        )
-                        
-                        try await client
-                            .from("challenge_rounds")
-                            .insert(newRound)
-                            .execute()
-                        
-                        // Move to next round
-                        switch roundDur {
-                        case .daily:
-                            currentRoundStart = calendar.date(byAdding: .day, value: 1, to: currentRoundStart)!
-                        case .weekly:
-                            currentRoundStart = calendar.date(byAdding: .weekOfYear, value: 1, to: currentRoundStart)!
-                        case .monthly:
-                            currentRoundStart = calendar.date(byAdding: .month, value: 1, to: currentRoundStart)!
-                        }
-                        
-                        nextRoundNumber += 1
-                        
-                        if nextRoundNumber > 1000 {
-                            print("Warning: Too many rounds, breaking")
-                            break
-                        }
-                    }
+                if let last = existing.first {
+                    try await appendRounds(
+                        challengeId: challenge.id,
+                        duration: duration,
+                        after: last,
+                        endDate: endDate
+                    )
                 }
             }
-            
+
             if notifyFeed {
-                var goalText = "\(target) \(challenge.metric.unit)"
-                if challenge.type == .count {
-                    if let endDate = endDate {
-                        goalText = "Most \(challenge.metric.displayName) by \(endDate.formatted(date: .abbreviated, time: .omitted))"
-                    } else {
-                        goalText = "Most \(challenge.metric.displayName)"
-                    }
-                }
-                
-                let payload: [String: String] = [
-                    "title": title,
-                    "metric": challenge.metric.displayName,
-                    "goal": goalText,
-                    "challenge_id": challenge.id.uuidString
-                ]
-                await SocialFeedManager.shared.post(type: .challenge_updated, familyId: challenge.family_id, payload: payload)
+                let names = selectedMetrics.map(\.displayName).joined(separator: ", ")
+                await SocialFeedManager.shared.post(
+                    type: .challenge_updated,
+                    familyId: challenge.family_id,
+                    payload: [
+                        "title": title,
+                        "metric": names,
+                        "goal": challenge.type == .count ? "Most \(names)" : "\(target) \(primaryMetric.unit)",
+                        "status": challenge.status.rawValue,
+                        "challenge_id": challenge.id.uuidString
+                    ]
+                )
             }
-            
             return true
         } catch {
             print("Update challenge error: \(error)")
@@ -594,15 +567,39 @@ class ChallengeViewModel: ObservableObject {
             return false
         }
     }
-    
+
+    private func appendRounds(
+        challengeId: UUID,
+        duration: RoundDuration,
+        after lastRound: ChallengeRound,
+        endDate: Date
+    ) async throws {
+        let calendar = Calendar.current
+        var start = calendar.startOfDay(for: lastRound.end_date.addingTimeInterval(1))
+        var number = lastRound.round_number + 1
+        while start < endDate, number <= 1000 {
+            let next: Date
+            switch duration {
+            case .daily: next = calendar.date(byAdding: .day, value: 1, to: start)!
+            case .weekly: next = calendar.date(byAdding: .weekOfYear, value: 1, to: start)!
+            case .monthly: next = calendar.date(byAdding: .month, value: 1, to: start)!
+            }
+            let insert = ChallengeRoundInsert(
+                challenge_id: challengeId,
+                round_number: number,
+                start_date: Self.isoFormatter.string(from: start),
+                end_date: Self.isoFormatter.string(from: min(next.addingTimeInterval(-1), endDate)),
+                status: Date() < start ? "pending" : "active"
+            )
+            try await client.from("challenge_rounds").insert(insert).execute()
+            start = next
+            number += 1
+        }
+    }
+
     func deleteChallenge(challengeId: UUID) async -> Bool {
         do {
-            try await client
-                .from("challenges")
-                .delete()
-                .eq("id", value: challengeId)
-                .execute()
-            
+            try await client.from("challenges").delete().eq("id", value: challengeId).execute()
             return true
         } catch {
             print("Delete challenge error: \(error)")
@@ -610,253 +607,198 @@ class ChallengeViewModel: ObservableObject {
             return false
         }
     }
-    
-    // MARK: - Round Management
-    
+
+    // MARK: - Rounds
+
     func loadRounds(for challenge: Challenge) async {
         guard challenge.round_duration != nil else { return }
-        
         isLoading = true
-        rounds = []
-        roundWinCounts = [:]
-        
         do {
-            let fetchedRounds: [ChallengeRound] = try await client
+            rounds = try await client
                 .from("challenge_rounds")
                 .select()
                 .eq("challenge_id", value: challenge.id)
                 .order("round_number")
                 .execute()
                 .value
-            
-            rounds = fetchedRounds
-            
-            // Calculate win counts
-            var winCounts: [UUID: Int] = [:]
-            for round in fetchedRounds {
-                if round.status == "completed", let winnerId = round.winner_id {
-                    winCounts[winnerId, default: 0] += 1
-                }
-            }
-            roundWinCounts = winCounts
-            
+
+            let winners: [ChallengeMetricWinner] = try await client
+                .from("challenge_metric_winners")
+                .select()
+                .eq("challenge_id", value: challenge.id)
+                .not("round_id", operator: .is, value: "null")
+                .execute()
+                .value
+            metricWinners = winners
+            roundWinCounts = Dictionary(grouping: winners, by: \.user_id).mapValues(\.count)
+
+            let profiles = participants.map(\.profile)
+            overallStandings = standings(profiles: profiles, winners: winners)
         } catch {
             print("Load rounds error: \(error)")
         }
-        
         isLoading = false
     }
-    
+
     func loadRoundParticipants(for round: ChallengeRound) async {
-        isLoading = true
-        currentRoundParticipants = []
-        
         do {
-            let participants: [RoundParticipant] = try await client
+            currentRoundParticipants = try await client
                 .from("round_participants")
                 .select()
                 .eq("round_id", value: round.id)
                 .order("rank")
                 .execute()
                 .value
-            
-            currentRoundParticipants = participants
-            
         } catch {
             print("Load round participants error: \(error)")
         }
-        
-        isLoading = false
     }
-    
-    func fetchRoundStats(for challenge: Challenge, round: ChallengeRound) async -> [ChallengeParticipant] {
-        guard challenge.roundDuration != nil else { return [] }
-        
+
+    func fetchRoundLeaderboards(
+        for challenge: Challenge,
+        round: ChallengeRound
+    ) async -> [MetricLeaderboard] {
         do {
-            // 1. Get community profiles
             let profiles = await CommunityMembershipManager.shared.fetchMembers(for: challenge.family_id)
-            
-            let userIds = profiles.map { $0.id }
-            
-            // 2. Aggregate stats for the round date range
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyy-MM-dd"
-            dateFormatter.calendar = Calendar.current
-            dateFormatter.timeZone = TimeZone.current
-            
-            let startString = dateFormatter.string(from: round.start_date)
-            // Use min(now, end_date) to not show future stats if round acts weird, though round end is usually fixed.
-            // But for live stats of active round, we just want up to now?
-            // Actually, querying date <= endString is fine, DB won't have future dates.
-            let endString = dateFormatter.string(from: round.end_date)
-            
-            let stats: [DailyStatDB] = try await client
-                .from("daily_stats")
-                .select()
-                .in("user_id", values: userIds)
-                .gte("date", value: startString)
-                .lte("date", value: endString)
-                .execute()
-                .value
-            
-            // 3. Calculate values
-            var tempParticipants: [ChallengeParticipant] = []
-            
-            for profile in profiles {
-                let userStats = stats.filter { $0.user_id == profile.id }
-                
-                let totalValue = aggregateValue(for: challenge.metric, stats: userStats)
-                
-                // For round stats, progress might be relative to leader or target?
-                // Rounds usually don't have a fixed "target", it's "most X".
-                // Let's use 0 for now, or relative to max later.
-                tempParticipants.append(ChallengeParticipant(
-                    id: profile.id,
-                    profile: profile,
-                    value: totalValue,
-                    progress: 0,
-                    rank: 0
-                ))
-            }
-            
-            // 4. Sort and rank
-            tempParticipants.sort { $0.value > $1.value }
-            
-            // Calculate progress relative to leader
-            let maxValue = tempParticipants.first?.value ?? 1
-            for i in 0..<tempParticipants.count {
-                tempParticipants[i].rank = i + 1
-                if maxValue > 0 {
-                    tempParticipants[i].progress = tempParticipants[i].value / maxValue
-                }
-            }
-            
-            return tempParticipants
-            
+            let metrics = await fetchMetrics(for: challenge)
+            let stats = try await fetchStats(
+                userIds: profiles.map(\.id),
+                start: round.start_date,
+                end: min(Date(), round.end_date)
+            )
+            return buildLeaderboards(
+                metrics: challenge.type == .count ? metrics : [challenge.metric],
+                type: challenge.type,
+                target: challenge.target_value,
+                profiles: profiles,
+                stats: stats
+            )
         } catch {
             print("Fetch round stats error: \(error)")
             return []
         }
     }
 
+    func fetchRoundStats(for challenge: Challenge, round: ChallengeRound) async -> [ChallengeParticipant] {
+        await fetchRoundLeaderboards(for: challenge, round: round).first?.participants ?? []
+    }
+
     func calculateRoundWinner(for challenge: Challenge, round: ChallengeRound) async {
-        let participants = await fetchRoundStats(for: challenge, round: round)
-        guard !participants.isEmpty else { return }
-        
+        guard round.finalized_at == nil else { return }
+        let leaderboards = await fetchRoundLeaderboards(for: challenge, round: round)
+        guard !leaderboards.isEmpty else { return }
+
+        for leaderboard in leaderboards {
+            await persistWinners(
+                challengeId: challenge.id,
+                roundId: round.id,
+                leaderboard: leaderboard
+            )
+        }
+
         do {
-            // 5. Insert round_participants
-            for participant in participants {
-                let roundParticipant = RoundParticipantInsert(
-                    round_id: round.id,
-                    user_id: participant.id,
-                    value: participant.value,
-                    rank: participant.rank
-                )
-                
-                try await client
-                    .from("round_participants")
-                    .upsert(roundParticipant)
-                    .execute()
-            }
-            
-            // 6. Determine winner(s) - all with max value
-            // Since list is sorted, first has max value
-            guard let firstString = participants.first, firstString.value > 0 else { return }
-            let maxValue = firstString.value
-            let winners = participants.filter { $0.value == maxValue }
-            
-            if let firstWinner = winners.first {
-                try await client
-                    .from("challenge_rounds")
-                    .update(["winner_id": firstWinner.id.uuidString, "status": "completed"])
-                    .eq("id", value: round.id)
-                    .execute()
+            let primaryWinner = leaderboards.first?.participants.first
+            let claimed: [ChallengeRound] = try await client
+                .from("challenge_rounds")
+                .update([
+                    "winner_id": primaryWinner?.id.uuidString,
+                    "status": "completed",
+                    "finalized_at": Self.isoFormatter.string(from: Date())
+                ])
+                .eq("id", value: round.id)
+                .is("finalized_at", value: nil)
+                .select()
+                .execute()
+                .value
+            guard !claimed.isEmpty else { return }
 
-                // Guard against duplicate feed posts for this round across concurrent callers
-                let roundPostKey = "posted_round_winner_\(round.id.uuidString)"
-                guard !UserDefaults.standard.bool(forKey: roundPostKey) else { return }
-                UserDefaults.standard.set(true, forKey: roundPostKey)
+            let winnerNames = Set(leaderboards.flatMap { leaderboard in
+                guard let top = leaderboard.participants.first?.value, top > 0 else { return [String]() }
+                return leaderboard.participants
+                    .filter { $0.value == top }
+                    .map { $0.profile.display_name ?? $0.profile.email ?? "Unknown" }
+            }).sorted().joined(separator: ", ")
 
-                for winner in winners {
-                    let payload: [String: String] = [
-                        "challenge_title": challenge.title,
-                        "round_number": String(round.round_number),
-                        "winner_name": winner.profile.display_name ?? "Unknown",
-                        "challenge_id": challenge.id.uuidString
-                    ]
-
-                    await SocialFeedManager.shared.post(
-                        type: .round_winner,
-                        familyId: challenge.family_id,
-                        payload: payload
-                    )
-                }
-            }
-            
+            await SocialFeedManager.shared.post(
+                type: .round_winner,
+                familyId: challenge.family_id,
+                payload: [
+                    "challenge_title": challenge.title,
+                    "round_number": String(round.round_number),
+                    "winner_name": winnerNames,
+                    "metric": leaderboards.map { $0.metric.displayName }.joined(separator: ", "),
+                    "challenge_id": challenge.id.uuidString
+                ]
+            )
         } catch {
             print("Calculate round winner error: \(error)")
         }
     }
-    
-    func refreshCurrentRoundStats(for challenge: Challenge) async {
-        // Find active round
-        // We rely on 'rounds' being populated. If not, we might need to look at fetchedRounds in refreshRoundStatuses
-        // But refreshRoundStatuses calls loadRounds at the end.
-        
-        if let activeRound = rounds.first(where: { $0.status == "active" }) {
-            let stats = await fetchRoundStats(for: challenge, round: activeRound)
-            await MainActor.run {
-                self.currentRoundStats = stats
-            }
-        } else {
-            await MainActor.run {
-                self.currentRoundStats = []
+
+    private func persistWinners(
+        challengeId: UUID,
+        roundId: UUID?,
+        leaderboard: MetricLeaderboard
+    ) async {
+        guard let topValue = leaderboard.participants.first?.value, topValue > 0 else { return }
+        for participant in leaderboard.participants where participant.value == topValue {
+            let insert = ChallengeMetricWinnerInsert(
+                challenge_id: challengeId,
+                round_id: roundId,
+                metric: leaderboard.metric,
+                user_id: participant.id,
+                value: participant.value
+            )
+            do {
+                try await client.from("challenge_metric_winners").insert(insert).execute()
+            } catch {
+                // The unique indexes make concurrent finalization harmless.
+                print("Persist metric winner skipped: \(error)")
             }
         }
     }
 
-    // MARK: - Fetch Single Challenge
-    
-    func fetchChallenge(id: UUID) async -> Challenge? {
-         do {
-             let challenges: [Challenge] = try await client
-                 .from("challenges")
-                 .select()
-                 .eq("id", value: id)
-                 .execute()
-                 .value
-             
-             return challenges.first
-         } catch {
-             print("Fetch single challenge error: \(error)")
-             return nil
-         }
+    func refreshCurrentRoundStats(for challenge: Challenge) async {
+        guard let active = rounds.first(where: { $0.status == "active" }) else {
+            currentRoundStats = []
+            currentRoundLeaderboards = []
+            return
+        }
+        let leaderboards = await fetchRoundLeaderboards(for: challenge, round: active)
+        currentRoundLeaderboards = leaderboards
+        currentRoundStats = leaderboards.first?.participants ?? []
     }
-    
+
+    func fetchChallenge(id: UUID) async -> Challenge? {
+        do {
+            let challenges: [Challenge] = try await client
+                .from("challenges")
+                .select()
+                .eq("id", value: id)
+                .execute()
+                .value
+            return challenges.first
+        } catch {
+            print("Fetch single challenge error: \(error)")
+            return nil
+        }
+    }
+
     func refreshRoundStatuses(for challenge: Challenge) async {
         guard challenge.round_duration != nil else { return }
-        
         do {
-            let fetchedRounds: [ChallengeRound] = try await client
+            let fetched: [ChallengeRound] = try await client
                 .from("challenge_rounds")
                 .select()
                 .eq("challenge_id", value: challenge.id)
                 .execute()
                 .value
-            
             let now = Date()
-            
-            for round in fetchedRounds {
-                // Check if status needs updating
-                // Also check if round is marked completed but has no winner (e.g. created in past)
-                let isRoundEnded = round.status == "active" && now > round.end_date
-                let isPastRoundUncalculated = round.status == "completed" && round.winner_id == nil
-                
-                if isRoundEnded || isPastRoundUncalculated {
-                    // Round ended or needs calculation
+
+            for round in fetched {
+                if round.finalized_at == nil, now > round.end_date {
                     await calculateRoundWinner(for: challenge, round: round)
-                } else if round.status == "pending" && now >= round.start_date {
-                    // Round just started
+                } else if round.status == "pending", now >= round.start_date, now <= round.end_date {
                     try await client
                         .from("challenge_rounds")
                         .update(["status": "active"])
@@ -864,195 +806,134 @@ class ChallengeViewModel: ObservableObject {
                         .execute()
                 }
             }
-            
-            // Reload rounds after status updates
             await loadRounds(for: challenge)
-            
-            // Refresh current round live stats
             await refreshCurrentRoundStats(for: challenge)
-            
         } catch {
             print("Refresh round statuses error: \(error)")
         }
     }
-    
-    // MARK: - Challenge Completion
-    
+
+    // MARK: - Completion
+
     func checkChallengeCompletion(for challenge: Challenge) async {
-        // 1. Check if already completed in DB
-        if challenge.status == .completed {
-            return
-        }
+        guard challenge.finalized_at == nil, challenge.status != .completed else { return }
+        guard challenge.type == .race || challenge.isEnded else { return }
 
-        // Temp fix: Allow re-posting for the known broken challenge
-        if challenge.id.uuidString == "0d56277c-87d6-4782-93a5-c77a4a5d0e6f" {
-            UserDefaults.standard.removeObject(forKey: "posted_challenge_won_\(challenge.id.uuidString)")
-        }
+        let profiles = await CommunityMembershipManager.shared.fetchMembers(for: challenge.family_id)
+        let metrics = await fetchMetrics(for: challenge)
+        let effectiveMetrics = challenge.type == .count ? metrics : [challenge.metric]
 
-        // Only check if challenge has ended (by date) OR if it's a Race that might be finished
-        // For non-race, we strictly respect end date
-        if challenge.type != .race && !challenge.isEnded {
-            return
-        }
-        
-        // Use a local lock to prevent double-posting from THIS device immediately
-        let completionKey = "posted_challenge_won_\(challenge.id.uuidString)"
-        if UserDefaults.standard.bool(forKey: completionKey) {
-            return
-        }
-        
         do {
-            // Get all participants
-            let profiles = await CommunityMembershipManager.shared.fetchMembers(for: challenge.family_id)
-            
-            var winnerName = "Someone"
-            var winMetric = ""
-            var winValue = ""
-            var hasWinner = false
-            
             if challenge.round_duration != nil {
-                // Round-based: Winner is person with most round wins
-                let rounds: [ChallengeRound] = try await client
-                    .from("challenge_rounds")
+                await refreshRoundStatuses(for: challenge)
+            }
+
+            let stats = try await fetchStats(
+                userIds: profiles.map(\.id),
+                start: challenge.start_date,
+                end: min(Date(), challenge.end_date ?? Date())
+            )
+            let leaderboards = buildLeaderboards(
+                metrics: effectiveMetrics,
+                type: challenge.type,
+                target: challenge.target_value,
+                profiles: profiles,
+                stats: stats
+            )
+
+            if challenge.type == .race,
+               (leaderboards.first?.participants.first?.value ?? 0) < Double(challenge.target_value),
+               !challenge.isEnded {
+                return
+            }
+
+            for leaderboard in leaderboards {
+                await persistWinners(challengeId: challenge.id, roundId: nil, leaderboard: leaderboard)
+            }
+
+            let overallWinners: [Profile]
+            let winningValue: String
+            let winningMetric: String
+
+            if challenge.round_duration != nil {
+                let roundWinners: [ChallengeMetricWinner] = try await client
+                    .from("challenge_metric_winners")
                     .select()
                     .eq("challenge_id", value: challenge.id)
+                    .not("round_id", operator: .is, value: "null")
                     .execute()
                     .value
-                
-                // Count wins
-                var winCounts: [UUID: Int] = [:]
-                for round in rounds {
-                    if let winnerId = round.winner_id {
-                        winCounts[winnerId, default: 0] += 1
-                    }
-                }
-                
-                // Find max wins
-                guard let (winnerId, wins) = winCounts.max(by: { $0.value < $1.value }) else {
-                    // No rounds won?
-                    UserDefaults.standard.set(true, forKey: completionKey)
+                let finalStandings = standings(profiles: profiles, winners: roundWinners)
+                let topWins = finalStandings.first?.wins ?? 0
+                overallWinners = finalStandings.filter { $0.wins == topWins && topWins > 0 }.map(\.profile)
+                winningValue = "\(topWins) wins"
+                winningMetric = "Metric Wins"
+            } else if challenge.type == .count {
+                let finalStandings = standings(profiles: profiles, winners: [], liveLeaderboards: leaderboards)
+                let topWins = finalStandings.first?.wins ?? 0
+                overallWinners = finalStandings.filter { $0.wins == topWins && topWins > 0 }.map(\.profile)
+                winningValue = "\(topWins) wins"
+                winningMetric = "Metric Wins"
+            } else {
+                guard let topValue = leaderboards.first?.participants.first?.value, topValue > 0 else {
+                    await markChallengeCompleted(challenge, winnerNames: nil, metric: nil, value: nil)
                     return
                 }
-                
-                if let profile = profiles.first(where: { $0.id == winnerId }) {
-                    winnerName = profile.display_name ?? profile.email ?? "Someone"
-                }
-                
-                winMetric = "Rounds Won"
-                winValue = "\(wins) wins"
-                hasWinner = true
-                
-            } else {
-                // Cumulative: Existing logic
-                let userIds = profiles.map { $0.id }
-                
-                // Get stats for the challenge period
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd"
-                let startString = formatter.string(from: challenge.start_date)
-                // For Race, we might be checking completion BEFORE end date, so use now
-                let endDateToCheck = challenge.end_date ?? Date()
-                let endString = formatter.string(from: endDateToCheck)
-                
-                let stats: [DailyStatDB] = try await client
-                    .from("daily_stats")
-                    .select()
-                    .in("user_id", values: userIds)
-                    .gte("date", value: startString)
-                    .lte("date", value: endString)
-                    .execute()
-                    .value
-                
-                // Calculate totals per user
-                var userTotals: [(userId: UUID, value: Double)] = []
-                
-                for profile in profiles {
-                    let userStats = stats.filter { $0.user_id == profile.id }
-                    let totalValue = aggregateValue(for: challenge.metric, stats: userStats)
-                    
-                    userTotals.append((userId: profile.id, value: totalValue))
-                }
-                
-                // Sort by value descending
-                userTotals.sort { $0.value > $1.value }
-                
-                // Get winner
-                guard let winner = userTotals.first else { return }
-                
-                // Check if winner actually won
-                // For Race: Must meet target
-                // For Others: Must be end date (checked above) and value > 0
-                
-                if challenge.type == .race {
-                    if winner.value >= Double(challenge.target_value) {
-                         // Race Won!
-                        hasWinner = true
-                    } else if challenge.isEnded {
-                        // Race ended without winner? Or closest?
-                        // Usually race implies "First to X". If time runs out, maybe person with most?
-                        // Let's assume standard logic: If ended, person with most wins if > 0
-                        if winner.value > 0 {
-                            hasWinner = true
-                        }
-                    }
-                } else {
-                    // Standard Leaderboard/Streak
-                    if winner.value > 0 {
-                        hasWinner = true
-                    }
-                }
-                
-                if hasWinner {
-                    if let winnerProfile = profiles.first(where: { $0.id == winner.userId }) {
-                        winnerName = winnerProfile.display_name ?? winnerProfile.email ?? "Someone"
-                    }
-                    winMetric = challenge.metric.displayName
-                    winValue = String(format: "%.0f", winner.value)
-                }
+                overallWinners = leaderboards.first?.participants
+                    .filter { $0.value == topValue }
+                    .map(\.profile) ?? []
+                winningValue = String(format: "%.0f", topValue)
+                winningMetric = challenge.type == .streak ? "Day Streak" : challenge.metric.displayName
             }
-            
-            if hasWinner {
-                // 1. Update Challenge Status to Completed to prevent other devices from posting
-                try await client
-                    .from("challenges")
-                    .update(["status": "completed"])
-                    .eq("id", value: challenge.id)
-                    .execute()
-                
-                // 2. Post feed event
-                let payload: [String: String] = [
-                    "challenge_title": challenge.title,
-                    "winner_name": winnerName,
-                    "metric": winMetric,
-                    "value": winValue,
-                    "challenge_id": challenge.id.uuidString
-                ]
-                
-                await SocialFeedManager.shared.post(type: .challenge_won, familyId: challenge.family_id, payload: payload)
-                
-                // 3. Mark locally
-                UserDefaults.standard.set(true, forKey: completionKey)
-                
-                // 4. Refresh list to show completed status UI
-                await fetchActiveChallenges(for: challenge.family_id)
-            } else if challenge.isEnded {
-                // Ended but no winner (e.g. 0 steps), mark completed anyway so we don't keep checking
-                 try await client
-                     .from("challenges")
-                     .update(["status": "completed"])
-                     .eq("id", value: challenge.id)
-                     .execute()
-                
-                await fetchActiveChallenges(for: challenge.family_id)
-            }
-            
+
+            let names = overallWinners.map { $0.display_name ?? $0.email ?? "Unknown" }
+            await markChallengeCompleted(
+                challenge,
+                winnerNames: names.isEmpty ? nil : names.joined(separator: ", "),
+                metric: winningMetric,
+                value: winningValue
+            )
         } catch {
             print("Check challenge completion error: \(error)")
         }
     }
-}
 
-// MARK: - Helper Structs for Round Management
+    private func markChallengeCompleted(
+        _ challenge: Challenge,
+        winnerNames: String?,
+        metric: String?,
+        value: String?
+    ) async {
+        do {
+            let claimed: [Challenge] = try await client
+                .from("challenges")
+                .update([
+                    "status": ChallengeStatus.completed.rawValue,
+                    "finalized_at": Self.isoFormatter.string(from: Date())
+                ])
+                .eq("id", value: challenge.id)
+                .is("finalized_at", value: nil)
+                .select()
+                .execute()
+                .value
+            guard !claimed.isEmpty, let winnerNames, let metric, let value else { return }
+
+            await SocialFeedManager.shared.post(
+                type: .challenge_won,
+                familyId: challenge.family_id,
+                payload: [
+                    "challenge_title": challenge.title,
+                    "winner_name": winnerNames,
+                    "metric": metric,
+                    "value": value,
+                    "challenge_id": challenge.id.uuidString
+                ]
+            )
+        } catch {
+            print("Complete challenge error: \(error)")
+        }
+    }
+}
 
 struct RoundParticipantInsert: Encodable {
     let round_id: UUID

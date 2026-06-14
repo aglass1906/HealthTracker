@@ -18,6 +18,8 @@ struct EditChallengeView: View {
     @State private var hasEndDate: Bool
     @State private var endDate: Date
     @State private var notifyFeed = true
+    @State private var selectedMetric: ChallengeMetric
+    @State private var selectedMetrics: Set<ChallengeMetric>
     
     @State private var showDeleteAlert = false
     
@@ -33,6 +35,8 @@ struct EditChallengeView: View {
         _startDate = State(initialValue: challenge.start_date)
         _hasEndDate = State(initialValue: challenge.end_date != nil)
         _endDate = State(initialValue: challenge.end_date ?? Date())
+        _selectedMetric = State(initialValue: challenge.metric)
+        _selectedMetrics = State(initialValue: [challenge.metric])
     }
     
     var body: some View {
@@ -40,13 +44,37 @@ struct EditChallengeView: View {
             Form {
                 Section("Details") {
                     TextField("Title", text: $title)
-                    
-                    HStack {
-                        Text("Target (\(challenge.metric.unit))")
-                        Spacer()
-                        TextField("Value", text: $targetValueStr)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
+
+                    if challenge.type == .count {
+                        ForEach(ChallengeMetric.allCases, id: \.self) { metric in
+                            Button {
+                                toggleMetric(metric)
+                            } label: {
+                                HStack {
+                                    Label(metric.displayName, systemImage: metric.icon)
+                                    Spacer()
+                                    if selectedMetrics.contains(metric) {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(.blue)
+                                    }
+                                }
+                            }
+                            .foregroundStyle(.primary)
+                        }
+                    } else {
+                        Picker("Metric", selection: $selectedMetric) {
+                            ForEach(ChallengeMetric.allCases, id: \.self) { metric in
+                                Label(metric.displayName, systemImage: metric.icon).tag(metric)
+                            }
+                        }
+
+                        HStack {
+                            Text("Target (\(selectedMetric.unit))")
+                            Spacer()
+                            TextField("Value", text: $targetValueStr)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                        }
                     }
                 }
                 
@@ -76,7 +104,11 @@ struct EditChallengeView: View {
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    .disabled(title.isEmpty || targetValueStr.isEmpty)
+                    .disabled(
+                        title.isEmpty
+                        || (challenge.type == .count && selectedMetrics.isEmpty)
+                        || (challenge.type != .count && targetValueStr.isEmpty)
+                    )
                 }
                 
                 Section {
@@ -87,6 +119,9 @@ struct EditChallengeView: View {
                             .frame(maxWidth: .infinity)
                     }
                 }
+            }
+            .task {
+                selectedMetrics = Set(await viewModel.fetchMetrics(for: challenge))
             }
             .navigationTitle("Edit Challenge")
             .navigationBarTitleDisplayMode(.inline)
@@ -105,14 +140,27 @@ struct EditChallengeView: View {
             }
         }
     }
+
+    private func toggleMetric(_ metric: ChallengeMetric) {
+        if selectedMetrics.contains(metric) {
+            if selectedMetrics.count > 1 {
+                selectedMetrics.remove(metric)
+            }
+        } else {
+            selectedMetrics.insert(metric)
+        }
+    }
     
     private func update() {
-        guard let target = Int(targetValueStr) else { return }
+        let target = challenge.type == .count ? 0 : (Int(targetValueStr) ?? 0)
         
         Task {
             let success = await viewModel.updateChallenge(
                 challenge: challenge,
                 title: title,
+                metrics: challenge.type == .count
+                    ? ChallengeMetric.allCases.filter(selectedMetrics.contains)
+                    : [selectedMetric],
                 target: target,
                 startDate: startDate,
                 endDate: hasEndDate ? endDate : nil,

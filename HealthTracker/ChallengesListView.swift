@@ -161,7 +161,7 @@ struct ChallengesListView: View {
         
         // Add target/goal
         if challenge.type == .count {
-            parts.append("Most \(challenge.metric.displayName)")
+            parts.append("Metric wins")
         } else if challenge.type == .streak {
             parts.append("\(challenge.target_value) \(challenge.metric.unit)/day")
         } else {

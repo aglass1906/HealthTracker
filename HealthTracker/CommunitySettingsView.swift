@@ -43,7 +43,7 @@ struct CommunitySettingsView: View {
                         }
                     }
                     
-                    Section("More Communities") {
+                    Section("Join a Community") {
                         HStack {
                             TextField("Invite Code", text: $viewModel.joinCode)
                                 .keyboardType(.numberPad)
@@ -53,7 +53,9 @@ struct CommunitySettingsView: View {
                             }
                             .disabled(viewModel.joinCode.count < 6)
                         }
-                        
+                    }
+
+                    Section("Create a Community") {
                         HStack {
                             TextField("Community Name", text: $viewModel.newFamilyName)
                             
@@ -61,26 +63,6 @@ struct CommunitySettingsView: View {
                                 Task { await viewModel.createFamily() }
                             }
                             .disabled(viewModel.newFamilyName.isEmpty)
-                        }
-                    }
-                    
-                    // MARK: - Members
-                    Section("Members") {
-                        ForEach(viewModel.members) { member in
-                            HStack {
-                                Image(systemName: "person.circle.fill")
-                                    .foregroundStyle(.blue)
-                                    .font(.title2)
-                                VStack(alignment: .leading) {
-                                    Text(member.display_name ?? member.email ?? "Unknown")
-                                        .font(.headline)
-                                    if member.id == AuthManager.shared.session?.user.id {
-                                        Text("You")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
                         }
                     }
                     

@@ -23,6 +23,7 @@ struct Challenge: Identifiable, Codable {
     let round_duration: String?
     let current_round_number: Int?
     let total_rounds: Int?
+    let finalized_at: Date?
     
     // Computed props to expose Dates to the app
     var start_date: Date {
@@ -50,7 +51,7 @@ struct Challenge: Identifiable, Codable {
         case id, family_id, creator_id, title, description, type, metric, target_value, status, created_at
         case start_date_string = "start_date"
         case end_date_string = "end_date"
-        case round_duration, current_round_number, total_rounds
+        case round_duration, current_round_number, total_rounds, finalized_at
     }
     
     // Helper to check if active
@@ -174,6 +175,7 @@ struct ChallengeRound: Identifiable, Codable {
     let winner_id: UUID?
     let status: String
     let created_at: Date
+    let finalized_at: Date?
     
     var start_date: Date {
         let formatter = ISO8601DateFormatter()
@@ -192,10 +194,27 @@ struct ChallengeRound: Identifiable, Codable {
     }
     
     enum CodingKeys: String, CodingKey {
-        case id, challenge_id, round_number, winner_id, status, created_at
+        case id, challenge_id, round_number, winner_id, status, created_at, finalized_at
         case start_date_string = "start_date"
         case end_date_string = "end_date"
     }
+}
+
+struct ChallengeMetricRecord: Identifiable, Codable {
+    let id: UUID
+    let challenge_id: UUID
+    let metric: ChallengeMetric
+    let display_order: Int
+}
+
+struct ChallengeMetricWinner: Identifiable, Codable {
+    let id: UUID
+    let challenge_id: UUID
+    let round_id: UUID?
+    let metric: ChallengeMetric
+    let user_id: UUID
+    let value: Double
+    let created_at: Date
 }
 
 struct RoundParticipant: Identifiable, Codable {

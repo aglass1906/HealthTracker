@@ -77,7 +77,12 @@ struct ChallengeRoundsView: View {
                 } else {
                     LazyVStack(spacing: 16) {
                         ForEach(filteredRounds) { round in
-                            RoundCard(round: round, challenge: challenge, participants: viewModel.participants)
+                            RoundCard(
+                                round: round,
+                                challenge: challenge,
+                                participants: viewModel.participants,
+                                winners: viewModel.metricWinners.filter { $0.round_id == round.id }
+                            )
                         }
                     }
                     .padding(.horizontal)
@@ -153,6 +158,7 @@ struct RoundCard: View {
     let round: ChallengeRound
     let challenge: Challenge
     let participants: [ChallengeParticipant]
+    let winners: [ChallengeMetricWinner]
     
     var roundLabel: String {
         guard let duration = challenge.roundDuration else { return "Round \(round.round_number)" }
@@ -168,16 +174,30 @@ struct RoundCard: View {
     }
     
     var winnerName: String? {
+        let names = Set(winners.compactMap { winner in
+            participants.first(where: { $0.id == winner.user_id })?.profile.display_name
+        }).sorted()
+        if !names.isEmpty {
+            return names.joined(separator: ", ")
+        }
         guard let winnerId = round.winner_id else { return nil }
         return participants.first(where: { $0.id == winnerId })?.profile.display_name ?? "Unknown"
     }
     
     var statusColor: Color {
-        round.status == "completed" ? .green : .blue
+        switch round.status {
+        case "completed": return .green
+        case "pending": return .gray
+        default: return .blue
+        }
     }
     
     var statusText: String {
-        round.status == "completed" ? "Completed" : "Active"
+        switch round.status {
+        case "completed": return "Completed"
+        case "pending": return "Upcoming"
+        default: return "Active"
+        }
     }
     
     var body: some View {
@@ -211,11 +231,25 @@ struct RoundCard: View {
                     Image(systemName: "crown.fill")
                         .foregroundStyle(.yellow)
                         .font(.caption)
-                    Text("Winner: \(winner)")
+                    Text("Winner\(winner.contains(",") ? "s" : ""): \(winner)")
                         .font(.subheadline)
                         .fontWeight(.semibold)
                 }
                 .padding(.top, 4)
+            }
+
+            if !winners.isEmpty {
+                ForEach(Dictionary(grouping: winners, by: \.metric).keys.sorted {
+                    $0.displayName < $1.displayName
+                }, id: \.self) { metric in
+                    let metricWinners = winners.filter { $0.metric == metric }
+                    let names = metricWinners.compactMap { winner in
+                        participants.first(where: { $0.id == winner.user_id })?.profile.display_name
+                    }.joined(separator: ", ")
+                    Text("\(metric.displayName): \(names)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding()
