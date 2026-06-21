@@ -6,6 +6,10 @@
 	<string>HealthTracker uses the camera to scan food barcodes and take meal photos for nutrition logging.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>HealthTracker needs photo library access so you can choose meal photos for nutrition logging.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>HealthTracker uses the microphone to dictate meal descriptions for nutrition logging.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>HealthTracker uses speech recognition to turn dictated meal descriptions into text before nutrition lookup.</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.healthtracker.refresh</string>

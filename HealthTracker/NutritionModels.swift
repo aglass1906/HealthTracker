@@ -263,6 +263,7 @@ struct FoodCandidateDTO: Codable, Identifiable {
     var nutrients_extra: [String: Double]?
     var image_url: String?
     var source: String?
+    var suggested_quantity: Double?
 
     func scaled(gramsEaten: Double) -> FoodCandidateDTO {
         let base = grams ?? 100
@@ -288,7 +289,8 @@ struct FoodCandidateDTO: Codable, Identifiable {
             household_serving_text: household_serving_text,
             nutrients_extra: scaledExtra,
             image_url: image_url,
-            source: source
+            source: source,
+            suggested_quantity: suggested_quantity
         )
     }
 }
@@ -319,6 +321,7 @@ extension FoodCandidateDTO {
         nutrients_extra = nutrientsScaled
         image_url = item.image_url
         source = nil
+        suggested_quantity = nil
     }
 
     var sugarGramsFromNutrients: Double {

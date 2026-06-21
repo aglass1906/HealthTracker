@@ -24,6 +24,13 @@ type FoodCandidate = {
   nutrients_extra?: Record<string, number> | null
   image_url?: string | null
   source: "usda" | "off"
+  suggested_quantity?: number | null
+}
+
+type DescribedMealItem = {
+  food: string
+  search_query: string
+  quantity: number
 }
 
 const NUTRIENT_IDS = {
@@ -543,6 +550,68 @@ async function openaiDescribeFoods(
   return trimmed.split(",").map((s) => s.replace(/^\[|\]|"/g, "").trim()).filter(Boolean)
 }
 
+async function openaiDescribeMealText(
+  description: string,
+  apiKey: string,
+): Promise<DescribedMealItem[]> {
+  const body = {
+    model: "gpt-4o-mini",
+    messages: [
+      {
+        role: "system",
+        content:
+          "You parse meal descriptions for nutrition lookup. Return JSON only. Use common USDA-searchable food names. Estimate quantity as servings/count multiplier when the user gives a count; otherwise use 1.",
+      },
+      {
+        role: "user",
+        content:
+          `Parse this meal into distinct food items. Return a JSON array of objects with keys food, search_query, quantity. Max 8 items. Meal: ${description}`,
+      },
+    ],
+    max_tokens: 500,
+  }
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const t = await res.text()
+    console.error("OpenAI text meal error:", t)
+    return []
+  }
+  const data = await res.json()
+  const text = data.choices?.[0]?.message?.content as string | undefined
+  if (!text) return []
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "")
+  try {
+    const arr = JSON.parse(trimmed)
+    if (!Array.isArray(arr)) return []
+    return arr
+      .map((raw) => {
+        const obj = raw as Record<string, unknown>
+        const food = String(obj.food ?? obj.name ?? "").trim()
+        const search = String(obj.search_query ?? obj.query ?? food).trim()
+        const qRaw = num(obj.quantity)
+        const quantity = qRaw != null && qRaw > 0 ? Math.min(Math.max(qRaw, 0.25), 20) : 1
+        if (!food && !search) return null
+        return {
+          food: food || search,
+          search_query: search || food,
+          quantity,
+        } satisfies DescribedMealItem
+      })
+      .filter((x): x is DescribedMealItem => x != null)
+      .slice(0, 8)
+  } catch (e) {
+    console.error("OpenAI text meal parse failed:", e, trimmed)
+    return []
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
@@ -676,8 +745,49 @@ Deno.serve(async (req) => {
         candidates.push(...batch.slice(0, 2))
       }
       candidates = candidates.slice(0, 12)
+    } else if (mode === "describe") {
+      const q = (json.query || "").trim()
+      if (q.length < 3) {
+        return new Response(JSON.stringify({ error: "Meal description too short" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        })
+      }
+      if (!openaiKey) {
+        return new Response(
+          JSON.stringify({
+            candidates: [],
+            notice:
+              "Meal description analysis requires OPENAI_API_KEY on the food-lookup function. Use Search, Barcode, or Photo, or add the secret in Supabase.",
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        )
+      }
+      const items = await openaiDescribeMealText(q, openaiKey)
+      if (!items.length) {
+        notice = "Could not identify foods from that description. Try adding amounts or simpler food names."
+      }
+      const seen = new Set<string>()
+      for (const item of items) {
+        const key = `${item.search_query.toLowerCase()}|${item.quantity}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        let batch: FoodCandidate[] = []
+        if (usdaKey) batch = await usdaSearchToCandidates(item.search_query, usdaKey)
+        if (!batch.length) batch = await openFoodFactsSearch(item.search_query)
+        for (const c of batch.slice(0, 2)) {
+          c.suggested_quantity = item.quantity
+          candidates.push(c)
+        }
+      }
+      candidates = candidates.slice(0, 12)
+      if (!candidates.length && !notice) {
+        notice = "No nutrition matches found for that meal description."
+      } else if (candidates.length) {
+        await fillMissingImages(candidates)
+      }
     } else {
-      return new Response(JSON.stringify({ error: "Invalid mode; use barcode | photo | search" }), {
+      return new Response(JSON.stringify({ error: "Invalid mode; use barcode | photo | search | describe" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       })

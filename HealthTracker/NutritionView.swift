@@ -1430,6 +1430,7 @@ private struct ComboGroupRow: View {
 // MARK: - Log food flow
 
 private enum LogMode: String, CaseIterable, Identifiable {
+    case describe = "Describe"
     case search = "Search"
     case barcode = "Barcode"
     case photo = "Photo"
@@ -1441,8 +1442,11 @@ struct LogFoodSheet: View {
     let initialDate: Date
     @Environment(\.dismiss) private var dismiss
     @StateObject private var nutritionManager = NutritionManager.shared
+    @StateObject private var speechManager = SpeechMealDescriptionManager()
     @State private var mode: LogMode = .search
     @State private var searchText = ""
+    @State private var descriptionText = ""
+    @State private var speechBaseText = ""
     @State private var candidates: [FoodCandidateDTO] = []
     @State private var notice: String?
     @State private var isLookingUp = false
@@ -1497,6 +1501,9 @@ struct LogFoodSheet: View {
                 .padding(.horizontal)
                 .onChange(of: mode) { _, _ in
                     selectedCandidateOffsets.removeAll()
+                    if mode != .describe {
+                        speechManager.stop()
+                    }
                 }
 
                 DatePicker("Time", selection: $loggedAt, displayedComponents: [.date, .hourAndMinute])
@@ -1515,6 +1522,8 @@ struct LogFoodSheet: View {
                 favoritesSection
 
                 switch mode {
+                case .describe:
+                    describeSection
                 case .search:
                     searchSection
                 case .barcode:
@@ -1525,6 +1534,13 @@ struct LogFoodSheet: View {
             }
             .navigationTitle("Log food")
             .onAppear { refreshFavorites() }
+            .onDisappear { speechManager.stop() }
+            .onChange(of: speechManager.transcript) { _, newValue in
+                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                let base = speechBaseText.trimmingCharacters(in: .whitespacesAndNewlines)
+                descriptionText = base.isEmpty ? trimmed : "\(base) \(trimmed)"
+            }
             .navigationBarTitleDisplayMode(.inline)
             .alert("Camera not available", isPresented: $showingCameraUnavailableAlert) {
                 Button("OK", role: .cancel) {}
@@ -1585,7 +1601,9 @@ struct LogFoodSheet: View {
                     loggedAt: $loggedAt,
                     mealCategory: $mealCategory,
                     syncToHealthKit: syncToHealthKit,
+                    source: pendingSource == "ai_text" ? "ai_text" : "photo",
                     photoJPEG: photoJPEG,
+                    initialNotes: pendingSource == "ai_text" ? descriptionText : "",
                     onFavoritesChanged: { refreshFavorites() },
                     onDone: {
                         showingMultiConfirm = false
@@ -1699,6 +1717,97 @@ struct LogFoodSheet: View {
                     .padding(.horizontal)
                 }
             }
+        }
+    }
+
+    private var describeSection: some View {
+        VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Describe meal")
+                    .font(.headline)
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $descriptionText)
+                        .frame(minHeight: 110)
+                        .padding(8)
+                        .background(Color(.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(Color.secondary.opacity(0.25), lineWidth: 1)
+                        )
+                    if descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("Example: 2 scrambled eggs, sourdough toast with butter, and coffee with milk")
+                            .font(.body)
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 16)
+                            .allowsHitTesting(false)
+                    }
+                }
+                HStack(spacing: 10) {
+                    Button {
+                        toggleSpeech()
+                    } label: {
+                        Label(
+                            speechManager.isRecording ? "Stop" : "Dictate",
+                            systemImage: speechManager.isRecording ? "stop.circle.fill" : "mic.circle.fill"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!speechManager.isAvailable && !speechManager.isRecording)
+
+                    Button {
+                        Task { await runDescribe() }
+                    } label: {
+                        if isLookingUp {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Label("Analyze", systemImage: "sparkles")
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 || isLookingUp)
+                }
+                if speechManager.isRecording {
+                    Text("Listening...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let speechError = speechManager.errorMessage {
+                    Text(speechError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+            .padding(.horizontal)
+            if isLookingUp {
+                ProgressView("Analyzing meal...")
+                    .font(.caption)
+            }
+            lookupNoticeView
+            if mode == .describe, !selectedCandidateOffsets.isEmpty {
+                Button {
+                    multiConfirmBases = selectedCandidateOffsets.sorted().compactMap { idx in
+                        guard candidates.indices.contains(idx) else { return nil }
+                        return candidates[idx]
+                    }
+                    pendingSource = "ai_text"
+                    multiConfirmSheetInstanceId = UUID()
+                    showingMultiConfirm = true
+                } label: {
+                    Text("Review \(selectedCandidateOffsets.count) food(s)")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.accentColor.opacity(0.15))
+                        .cornerRadius(12)
+                }
+                .padding(.horizontal)
+            }
+            candidateList
         }
     }
 
@@ -1918,7 +2027,7 @@ struct LogFoodSheet: View {
     private var candidateList: some View {
         List {
             ForEach(Array(candidates.enumerated()), id: \.offset) { index, c in
-                if mode == .photo {
+                if mode == .photo || mode == .describe {
                     Button {
                         if selectedCandidateOffsets.contains(index) {
                             selectedCandidateOffsets.remove(index)
@@ -1969,6 +2078,38 @@ struct LogFoodSheet: View {
                 Button("Done") { searchFocused = false }
             }
         }
+    }
+
+    private func toggleSpeech() {
+        if speechManager.isRecording {
+            speechManager.stop()
+        } else {
+            speechBaseText = descriptionText
+            speechManager.start()
+        }
+    }
+
+    private func runDescribe() async {
+        let q = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 3 else { return }
+        speechManager.stop()
+        isLookingUp = true
+        notice = nil
+        lookupNoticeIsError = false
+        defer { isLookingUp = false }
+        guard let res = await nutritionManager.lookupDescription(q) else {
+            lookupNoticeIsError = true
+            notice = nutritionManager.errorMessage ?? "Meal analysis failed."
+            candidates = []
+            selectedCandidateOffsets.removeAll()
+            return
+        }
+        lookupNoticeIsError = false
+        candidates = res.candidates
+        notice = res.notice
+        selectedCandidateOffsets = Set(candidates.indices)
+        pendingSource = "ai_text"
+        pendingBarcode = nil
     }
 
     private func runSearch() async {
@@ -2077,11 +2218,20 @@ private struct FoodCandidateRowContent: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
+                if let q = candidate.suggested_quantity, abs(q - 1) > 0.001 {
+                    Text("Suggested: \(formatQty(q))x")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
                 Text("\(Int(candidate.calories.rounded())) kcal · P \(Int(candidate.protein_g))g · C \(Int(candidate.carb_g))g · F \(Int(candidate.fat_g))g")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
         }
+    }
+
+    private func formatQty(_ q: Double) -> String {
+        abs(q.rounded() - q) < 0.001 ? String(format: "%.0f", q) : String(format: "%.2f", q)
     }
 }
 
@@ -2603,7 +2753,9 @@ struct ConfirmMultiFoodSheet: View {
     @Binding var loggedAt: Date
     @Binding var mealCategory: MealCategory
     let syncToHealthKit: Bool
+    let source: String
     let photoJPEG: Data?
+    let initialNotes: String
     var onFavoritesChanged: (() -> Void)?
     var onDone: () -> Void
     var onBack: () -> Void
@@ -2619,7 +2771,9 @@ struct ConfirmMultiFoodSheet: View {
         loggedAt: Binding<Date>,
         mealCategory: Binding<MealCategory>,
         syncToHealthKit: Bool,
+        source: String = "photo",
         photoJPEG: Data?,
+        initialNotes: String = "",
         onFavoritesChanged: (() -> Void)? = nil,
         onDone: @escaping () -> Void,
         onBack: @escaping () -> Void
@@ -2628,11 +2782,14 @@ struct ConfirmMultiFoodSheet: View {
         _loggedAt = loggedAt
         _mealCategory = mealCategory
         self.syncToHealthKit = syncToHealthKit
+        self.source = source
         self.photoJPEG = photoJPEG
+        self.initialNotes = initialNotes
         self.onFavoritesChanged = onFavoritesChanged
         self.onDone = onDone
         self.onBack = onBack
-        _quantities = State(initialValue: Array(repeating: 1, count: bases.count))
+        _quantities = State(initialValue: bases.map { max($0.suggested_quantity ?? 1, 0.01) })
+        _mealNotes = State(initialValue: initialNotes)
     }
 
     var body: some View {
@@ -2809,7 +2966,7 @@ struct ConfirmMultiFoodSheet: View {
         }
         let notesTrim = mealNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         let input = NutritionManager.MealSaveInput(
-            source: "photo",
+            source: source,
             mealType: mealCategory.rawValue,
             notes: notesTrim.isEmpty ? nil : notesTrim,
             barcodeRaw: nil,
