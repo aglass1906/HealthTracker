@@ -59,6 +59,8 @@ Background syncs go through `BackgroundTaskManager`, which coalesces rapid Healt
 - `social_events` — community feed events with `type` and JSON `payload`
 - `challenges`, `challenge_rounds`, `challenge_participants`, `round_participants`
 
+The Supabase anon key ships inside the app binary (standard for Supabase clients), so **row-level security policies are the only server-side access control** — every table above must have RLS enabled with policies scoping reads/writes appropriately (e.g. `daily_stats` writable only by its owner, `social_events` readable only by community members).
+
 ### Challenge System
 
 Three types: **Race** (first to cumulative X), **Streak** (consecutive days), **Count** (most by end date). Metrics: steps, calories, distance, exercise minutes, flights, workouts. Rounds can be daily/weekly/monthly within a challenge.

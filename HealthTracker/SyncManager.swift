@@ -37,66 +37,14 @@ class SyncManager {
         let standClosed = rings.stand.goal > 0 && rings.stand.value >= rings.stand.goal
         return moveClosed && exerciseClosed && standClosed ? 1 : 0
     }
-    
-    func uploadDailyStats(data: DailyHealthData) async {
-        guard let session = authManager.session else {
-            print("Sync skipped: No active session")
-            return
-        }
-        
-        let userId = session.user.id
-        
-        // Format date as YYYY-MM-DD for Postgres Date type
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        let dateString = formatter.string(from: data.date)
-        
-        // Calculate exercise minutes from workout durations
-        let totalMinutes = Int(data.workouts.reduce(0) { $0 + $1.duration } / 60)
-        
-        let uploadData = DailyStatUpload(
-            user_id: userId,
-            date: dateString,
-            steps: Int(data.steps),
-            calories: Int(data.calories),
-            flights: Int(data.flights),
-            distance: data.distance ?? 0.0,
-            workouts_count: data.workouts.count,
-            exercise_minutes: totalMinutes,
-            move_ring_value: data.activityRings?.move.value ?? 0,
-            exercise_ring_value: data.activityRings?.exercise.value ?? 0,
-            stand_ring_value: data.activityRings?.stand.value ?? 0,
-            all_rings_closed: allRingsClosed(data.activityRings)
-        )
-        
-        do {
-            try await authManager.client
-                .from("daily_stats")
-                .upsert(uploadData, onConflict: "user_id, date")
-                .execute()
-            print("Successfully synced data for \(dateString)")
-            
-            // Post "Goal Met" to every community the user belongs to.
-            let familyIds = await SocialFeedManager.shared.fetchCurrentUserCommunityIds()
-            for familyId in familyIds {
-                SocialFeedManager.shared.checkAndPostGoal(
-                    steps: Int(data.steps),
-                    calories: Int(data.calories),
-                    flights: Int(data.flights),
-                    distance: data.distance ?? 0.0,
-                    exerciseMinutes: totalMinutes,
-                    workoutsCount: data.workouts.count,
-                    familyId: familyId
-                )
-                 
-                // Also could post checkAndPostWorkout loop here, but SyncManager calls syncWorkouts separately typically.
-                // We will stick to the existing separate syncWorkouts calls.
-            }
-            
-        } catch {
-            print("Failed to sync data: \(error)")
-        }
+
+    /// Best available exercise minutes for the day: Apple's exercise ring
+    /// minutes when present (this is what My Data and the Fitness app show),
+    /// otherwise the summed duration of logged workouts.
+    private func exerciseMinutes(workouts: [WorkoutData], rings: ActivityRings?) -> Int {
+        let workoutMinutes = Int(workouts.reduce(0) { $0 + $1.duration } / 60)
+        let ringMinutes = Int(rings?.exercise.value ?? 0)
+        return max(ringMinutes, workoutMinutes)
     }
     
     func uploadBatchStats(dataList: [DailyHealthData]) async {
@@ -108,7 +56,7 @@ class SyncManager {
         formatter.locale = Locale(identifier: "en_US_POSIX")
 
         let uploadList = dataList.map { data -> DailyStatUpload in
-            let totalMinutes = Int(data.workouts.reduce(0) { $0 + $1.duration } / 60)
+            let totalMinutes = exerciseMinutes(workouts: data.workouts, rings: data.activityRings)
              return DailyStatUpload(
                 user_id: userId,
                 date: formatter.string(from: data.date),
@@ -138,26 +86,9 @@ class SyncManager {
         }
     }
     
-    func syncWorkouts(workouts: [WorkoutData]) async {
-        guard !workouts.isEmpty else { return }
-
-        let familyIds = await SocialFeedManager.shared.fetchCurrentUserCommunityIds()
-        for familyId in familyIds {
-            for workout in workouts {
-                SocialFeedManager.shared.checkAndPostWorkout(workout: workout, familyId: familyId)
-            }
-        }
-    }
-
-    func syncRings(rings: ActivityRings) async {
-        let familyIds = await SocialFeedManager.shared.fetchCurrentUserCommunityIds()
-        for familyId in familyIds {
-            SocialFeedManager.shared.checkAndPostRings(rings: rings, familyId: familyId)
-        }
-    }
-
     /// Single-call sync that uploads stats, workouts, and rings with only one
-    /// profile fetch — preferred for background syncs where network calls are limited.
+    /// community-membership fetch. Used by both foreground refreshes and
+    /// background syncs.
     func syncAll(data: DailyHealthData, workouts: [WorkoutData], rings: ActivityRings) async {
         guard let session = authManager.session else {
             print("Sync skipped: No active session")
@@ -169,7 +100,7 @@ class SyncManager {
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.locale = Locale(identifier: "en_US_POSIX")
         let dateString = formatter.string(from: data.date)
-        let totalMinutes = Int(data.workouts.reduce(0) { $0 + $1.duration } / 60)
+        let totalMinutes = exerciseMinutes(workouts: data.workouts, rings: rings)
 
         // 1. Upload daily stats
         let uploadData = DailyStatUpload(

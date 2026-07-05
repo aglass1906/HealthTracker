@@ -78,35 +78,38 @@ class SocialFeedManager {
     
     // MARK: - Duplication Check
     
-    private func hasPostedToday(type: String, familyId: UUID) async -> Bool {
+    /// Checks whether the current user already posted an event of `type` today.
+    /// Pass `goal` to additionally match the payload's goal field, so distinct
+    /// goal types (Steps, Calories, ...) are deduplicated independently.
+    private func hasPostedToday(type: String, familyId: UUID, goal: String? = nil) async -> Bool {
         guard let userId = AuthManager.shared.session?.user.id else { return false }
-        
+
         let today = Date()
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: today)
         let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay)!
-        
+
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        
+
         let startString = formatter.string(from: startOfDay)
         let endString = formatter.string(from: endOfDay)
-        
+
         do {
-            struct EventCount: Codable {
-                let count: Int
-            }
-            
-            let result = try await client
+            var query = client
                 .from("social_events")
                 .select("", head: true, count: .exact)
                 .eq("family_id", value: familyId)
                 .eq("user_id", value: userId)
                 .eq("type", value: type)
+            if let goal {
+                query = query.eq("payload->>goal", value: goal)
+            }
+            let result = try await query
                 .gte("created_at", value: startString)
                 .lt("created_at", value: endString)
                 .execute()
-            
+
             return (result.count ?? 0) > 0
         } catch {
             print("Error checking hasPostedToday: \(error)")
@@ -135,6 +138,8 @@ class SocialFeedManager {
                 UserDefaults.standard.set(true, forKey: key)
 
                 Task {
+                    // Server check (cross-device/session guard, per goal type)
+                    if await hasPostedToday(type: EventType.goal_met.rawValue, familyId: familyId, goal: type) { return }
                     let payload = [
                         "goal": type,
                         "value": displayValue

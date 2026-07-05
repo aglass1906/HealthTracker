@@ -120,11 +120,10 @@ class HealthDataStore: ObservableObject {
             
             saveData()
             
-            // Sync to Supabase
+            // Sync to Supabase (stats, goals, workouts and rings with a single
+            // community-membership fetch instead of one per call)
             Task {
-                await SyncManager.shared.uploadDailyStats(data: newData)
-                await SyncManager.shared.syncWorkouts(workouts: workoutsValue)
-                await SyncManager.shared.syncRings(rings: ringsValue)
+                await SyncManager.shared.syncAll(data: newData, workouts: workoutsValue, rings: ringsValue)
             }
             
             // Clear error on success
