@@ -36,12 +36,14 @@ class AuthManager: ObservableObject {
                     self.session = session
                     self.isAuthenticated = (session != nil)
                 }
-                
-                // If we have a session, try to preload data while splash is showing
-                if session != nil {
+
+                // If we have a session, try to preload data while splash is showing.
+                // Only do this for the initial session restore or a fresh sign-in —
+                // not for every token refresh / user update event.
+                if session != nil, state.event == .initialSession || state.event == .signedIn {
                     await preloadData()
                 }
-                
+
                 // Dimiss splash screen
                 await MainActor.run {
                     self.isRestoringSession = false

@@ -697,7 +697,10 @@ final class ChallengeViewModel: ObservableObject {
         }
 
         do {
-            let primaryWinner = leaderboards.first?.participants.first
+            // Only crown a winner when someone actually has activity;
+            // otherwise the round is finalized with no winner.
+            let primaryTop = leaderboards.first?.participants.first
+            let primaryWinner = (primaryTop?.value ?? 0) > 0 ? primaryTop : nil
             let claimed: [ChallengeRound] = try await client
                 .from("challenge_rounds")
                 .update([
@@ -718,6 +721,9 @@ final class ChallengeViewModel: ObservableObject {
                     .filter { $0.value == top }
                     .map { $0.profile.display_name ?? $0.profile.email ?? "Unknown" }
             }).sorted().joined(separator: ", ")
+
+            // Don't post a "round winner" feed event when nobody had activity.
+            guard !winnerNames.isEmpty else { return }
 
             await SocialFeedManager.shared.post(
                 type: .round_winner,

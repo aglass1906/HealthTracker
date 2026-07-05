@@ -80,21 +80,22 @@ class BackgroundTaskManager {
     
     private func handleBackgroundRefresh(task: BGAppRefreshTask) {
         print("🔄 Background refresh started")
-        
+
         // Schedule the next refresh before we do work
         scheduleBackgroundRefresh()
-        
-        // Set expiration handler
-        task.expirationHandler = {
-            print("⚠️ Background task expired")
-            // Cancel any ongoing work if needed
-        }
-        
+
         // Perform the actual work
-        Task {
+        let syncTask = Task {
             await performBackgroundSync()
-            task.setTaskCompleted(success: true)
+            task.setTaskCompleted(success: !Task.isCancelled)
             print("✅ Background refresh completed")
+        }
+
+        // Set expiration handler: cancel the in-flight sync so the task
+        // completes (with success == false) instead of overrunning its budget.
+        task.expirationHandler = {
+            print("⚠️ Background task expired - cancelling sync")
+            syncTask.cancel()
         }
     }
     

@@ -64,7 +64,8 @@ class DashboardCommunityViewModel: ObservableObject {
                  .from("challenges")
                  .select()
                  .in("family_id", values: familyIds)
-                 .gt("end_date", value: ISO8601DateFormatter().string(from: Date())) 
+                 .eq("status", value: ChallengeStatus.active.rawValue)
+                 .gt("end_date", value: ISO8601DateFormatter().string(from: Date()))
                  .order("end_date", ascending: true) // Ending soonest
                  .limit(1)
                  .execute()
@@ -116,6 +117,8 @@ class DashboardCommunityViewModel: ObservableObject {
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         let dateString = formatter.string(from: yesterday)
         
         do {

@@ -321,93 +321,87 @@ class HealthDataStore: ObservableObject {
         let endDate = today
         let startDate = calendar.date(byAdding: .day, value: -7, to: endDate)!
         
-        // Find which days we're missing
+        // Find which past days we're missing (today is always refreshed below,
+        // so it doesn't need to go through the batch import)
         var daysToImport: [Date] = []
         var currentDate = startDate
         while currentDate <= endDate {
             let dayData = allDailyData.first { calendar.isDate($0.date, inSameDayAs: currentDate) }
-            if dayData == nil {
+            if dayData == nil, !calendar.isDate(currentDate, inSameDayAs: today) {
                 daysToImport.append(currentDate)
             }
             currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!
         }
-        
-        // If we have today's data, just refresh it
-        if let todayData = todayData, calendar.isDate(todayData.date, inSameDayAs: today) {
-            await refreshTodayData()
-        } else {
-            // Import missing days
-            if !daysToImport.isEmpty, let minDate = daysToImport.min(), let maxDate = daysToImport.max() {
-                do {
-                    let dailyData = try await healthKitManager.fetchHealthDataForDateRange(
-                        from: minDate,
-                        to: maxDate
-                    )
-                    
-                    var updatedData: [DailyHealthData] = []
-                    for data in dailyData {
-                        if daysToImport.contains(where: { calendar.isDate($0, inSameDayAs: data.date) }) {
-                            let dayStart = calendar.startOfDay(for: data.date)
-                            let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)!
-                            
-                            do {
-                                let workouts = try await healthKitManager.fetchWorkouts(from: dayStart, to: dayEnd)
-                                let rings = try await healthKitManager.fetchActivityRings(for: data.date)
-                                
-                                var updated = data
-                                updated.workouts = workouts
-                                updated.activityRings = rings
-                                updatedData.append(updated)
-                                
-                                // Track seen workouts
-                                for workout in workouts {
-                                    if !lastSeenWorkoutIDs.contains(workout.id) {
-                                        lastSeenWorkoutIDs.insert(workout.id)
-                                    }
+
+        // Import missing past days first (if any), then refresh today.
+        if !daysToImport.isEmpty, let minDate = daysToImport.min(), let maxDate = daysToImport.max() {
+            do {
+                let dailyData = try await healthKitManager.fetchHealthDataForDateRange(
+                    from: minDate,
+                    to: maxDate
+                )
+
+                var updatedData: [DailyHealthData] = []
+                for data in dailyData {
+                    if daysToImport.contains(where: { calendar.isDate($0, inSameDayAs: data.date) }) {
+                        let dayStart = calendar.startOfDay(for: data.date)
+                        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)!
+
+                        do {
+                            let workouts = try await healthKitManager.fetchWorkouts(from: dayStart, to: dayEnd)
+                            let rings = try await healthKitManager.fetchActivityRings(for: data.date)
+
+                            var updated = data
+                            updated.workouts = workouts
+                            updated.activityRings = rings
+                            updatedData.append(updated)
+
+                            // Track seen workouts
+                            for workout in workouts {
+                                if !lastSeenWorkoutIDs.contains(workout.id) {
+                                    lastSeenWorkoutIDs.insert(workout.id)
                                 }
-                            } catch {
-                                updatedData.append(data)
                             }
+                        } catch {
+                            updatedData.append(data)
                         }
-                    }
-                    
-                    // Merge with existing data
-                    for newData in updatedData {
-                        if let index = allDailyData.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: newData.date) }) {
-                            allDailyData[index] = newData
-                        } else {
-                            allDailyData.append(newData)
-                        }
-                    }
-                    
-                    allDailyData.sort { $0.date > $1.date }
-                    saveData()
-                    
-                    // Sync to Supabase
-                    Task {
-                        await SyncManager.shared.uploadBatchStats(dataList: allDailyData)
-                    }
-                    
-                    // Update today's data
-                    todayData = allDailyData.first { calendar.isDate($0.date, inSameDayAs: today) }
-                    
-                    // Clear error on success
-                    lastErrorMessage = nil
-                } catch {
-                    print("Failed to import latest data: \(error)")
-                    
-                    // Check for locked database
-                    if let hkError = error as? HKError, hkError.code == .errorDatabaseInaccessible {
-                        lastErrorMessage = "Sync was interrupted because the device was locked. Information is being updated now..."
-                    } else {
-                        lastErrorMessage = "Import Latest Error: \(error.localizedDescription)"
                     }
                 }
-            } else {
-                // Just refresh today's data
-                await refreshTodayData()
+
+                // Merge with existing data
+                for newData in updatedData {
+                    if let index = allDailyData.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: newData.date) }) {
+                        allDailyData[index] = newData
+                    } else {
+                        allDailyData.append(newData)
+                    }
+                }
+
+                allDailyData.sort { $0.date > $1.date }
+                saveData()
+
+                // Sync to Supabase
+                Task {
+                    await SyncManager.shared.uploadBatchStats(dataList: allDailyData)
+                }
+
+                // Clear error on success
+                lastErrorMessage = nil
+            } catch {
+                print("Failed to import latest data: \(error)")
+
+                // Check for locked database
+                if let hkError = error as? HKError, hkError.code == .errorDatabaseInaccessible {
+                    lastErrorMessage = "Sync was interrupted because the device was locked. Information is being updated now..."
+                } else {
+                    lastErrorMessage = "Import Latest Error: \(error.localizedDescription)"
+                }
             }
         }
+
+        // Always refresh (and upload) today's data so it stays current even
+        // when past days were backfilled above.
+        await refreshTodayData()
     }
     
     var hasImportedData: Bool {

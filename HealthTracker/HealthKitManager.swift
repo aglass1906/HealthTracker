@@ -100,10 +100,16 @@ class HealthKitManager: ObservableObject {
     }
     
     // MARK: - Background Delivery
-    
+
+    /// True once observer queries have been registered; prevents duplicate
+    /// HKObserverQuery registration when authorization is re-checked.
+    private var isObservingHealthData = false
+
     func startObservingHealthData() {
         guard isAuthorized else { return }
-        
+        guard !isObservingHealthData else { return }
+        isObservingHealthData = true
+
         let typesToObserve: [(HKSampleType, HKUpdateFrequency)] = [
             (HKObjectType.quantityType(forIdentifier: .stepCount)!, .hourly),
             (HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!, .hourly),

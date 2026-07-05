@@ -14,7 +14,19 @@ class SocialFeedManager {
     private let client = AuthManager.shared.client
     
     private init() {}
-    
+
+    /// Locale-independent day string for UserDefaults dedup keys. The previous
+    /// key format used `Date().formatted(date: .numeric, ...)`, which changes
+    /// with the device locale and could re-post events after a region switch.
+    private static let dayKeyFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        return formatter
+    }()
+
     func fetchCurrentUserCommunityIds() async -> [UUID] {
         await CommunityMembershipManager.shared.fetchCommunityIdsForCurrentUser()
     }
@@ -108,13 +120,15 @@ class SocialFeedManager {
     // MARK: - Goal Checks (Prevent Duplicates)
     
     func checkAndPostGoal(steps: Int, calories: Int, flights: Int, distance: Double, exerciseMinutes: Int, workoutsCount: Int, familyId: UUID) {
-        let today = Date().formatted(date: .numeric, time: .omitted)
-        
+        let today = Self.dayKeyFormatter.string(from: Date())
+        let legacyToday = Date().formatted(date: .numeric, time: .omitted)
+
         func check(type: String, value: Double, threshold: Double, unit: String, displayValue: String) {
             let key = "posted_goal_\(familyId)_\(type)_\(today)"
+            let legacyKey = "posted_goal_\(familyId)_\(type)_\(legacyToday)"
 
-            // 1. Local Debounce
-            if UserDefaults.standard.bool(forKey: key) { return }
+            // 1. Local Debounce (legacy key honored so existing installs don't re-post)
+            if UserDefaults.standard.bool(forKey: key) || UserDefaults.standard.bool(forKey: legacyKey) { return }
 
             if value >= threshold {
                 // Set key immediately (before Task) to prevent concurrent calls racing through
@@ -159,11 +173,13 @@ class SocialFeedManager {
     // MARK: - Ring Checks
     
     func checkAndPostRings(rings: ActivityRings, familyId: UUID) {
-        let today = Date().formatted(date: .numeric, time: .omitted)
-        
+        let today = Self.dayKeyFormatter.string(from: Date())
+        let legacyToday = Date().formatted(date: .numeric, time: .omitted)
+
         func check(ring: RingData, type: EventType, keySuffix: String) {
             let key = "posted_ring_\(familyId)_\(keySuffix)_\(today)"
-            if UserDefaults.standard.bool(forKey: key) { return }
+            let legacyKey = "posted_ring_\(familyId)_\(keySuffix)_\(legacyToday)"
+            if UserDefaults.standard.bool(forKey: key) || UserDefaults.standard.bool(forKey: legacyKey) { return }
 
             if ring.value >= ring.goal && ring.goal > 0 {
                 // Set key immediately (before Task) to prevent concurrent calls racing through

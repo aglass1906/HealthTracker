@@ -123,6 +123,7 @@ class FamilyViewModel: ObservableObject {
     func createFamily() async {
         guard let userId = AuthManager.shared.session?.user.id, !newFamilyName.isEmpty else { return }
         isLoading = true
+        errorMessage = nil
         
         do {
             // Generate Random 6-digit code
@@ -158,6 +159,7 @@ class FamilyViewModel: ObservableObject {
     func joinFamily() async {
         guard let userId = AuthManager.shared.session?.user.id, !joinCode.isEmpty else { return }
         isLoading = true
+        errorMessage = nil
         
         do {
             // 1. Find family by code

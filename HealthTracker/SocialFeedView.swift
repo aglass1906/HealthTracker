@@ -784,13 +784,14 @@ struct SocialFeedItem: View {
     
     private func reconstructWorkout(from payload: [String: String]?) -> WorkoutData? {
         guard let payload = payload else { return nil }
-        
+
+        let duration = Double(payload["duration_seconds"] ?? "") ?? 0
         return WorkoutData(
             id: UUID().uuidString,
             workoutType: payload["workout_type"] ?? "Workout",
             startDate: Date(),
             endDate: Date(),
-            duration: 0,
+            duration: duration,
             totalEnergyBurned: Double(payload["calories"] ?? "0"),
             totalDistance: (Double(payload["distance"] ?? "0") ?? 0) * 1000
         )

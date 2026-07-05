@@ -33,7 +33,7 @@ There are no automated tests in this project. Verification is done by building s
 
 HealthKit → `HealthKitManager` (fetch) → `HealthDataStore` (local UserDefaults cache) → `SyncManager` (upload to Supabase `daily_stats`) → `SocialFeedManager` (post feed events)
 
-Background syncs go through `BackgroundTaskManager`, which coalesces rapid HealthKit delivery callbacks with a 2-second debounce before calling the same sync path.
+Background syncs go through `BackgroundTaskManager`, which coalesces rapid HealthKit delivery callbacks: while a sync is in flight, additional callbacks queue their completion handlers and are all completed when that sync finishes.
 
 ### Key Singletons
 

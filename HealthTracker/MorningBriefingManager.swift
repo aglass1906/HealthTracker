@@ -163,8 +163,14 @@ class MorningBriefingManager: ObservableObject {
             body += "."
         }
         
-        body += " You burned \(calories) kcal and closed \(data.activityRings?.move.progress ?? 0 >= 1.0 ? "all" : "your") rings."
-        
+        let allRingsClosed: Bool = {
+            guard let rings = data.activityRings else { return false }
+            return rings.move.progress >= 1.0
+                && rings.exercise.progress >= 1.0
+                && rings.stand.progress >= 1.0
+        }()
+        body += " You burned \(calories) kcal and closed \(allRingsClosed ? "all" : "your") rings."
+
         return ("Your Yesterday Summary", body)
     }
 }

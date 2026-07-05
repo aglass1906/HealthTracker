@@ -349,11 +349,22 @@ struct FamilySetupStep: View {
                     .textFieldStyle(.roundedBorder)
                     .keyboardType(.numberPad)
                     .padding(.horizontal, 32)
-                
+
+                if let error = familyViewModel.errorMessage {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+
                 Button {
                     Task {
                         await familyViewModel.joinFamily()
-                        onComplete()
+                        // Stay on this step if the join failed (e.g. bad code)
+                        if familyViewModel.errorMessage == nil {
+                            onComplete()
+                        }
                     }
                 } label: {
                     Text("Join Existing Family")

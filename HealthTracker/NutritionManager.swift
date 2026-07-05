@@ -57,7 +57,7 @@ final class NutritionManager: ObservableObject {
                 )
                 .eq("user_id", value: uid)
                 .gte("logged_at", value: startS)
-                .lte("logged_at", value: endS)
+                .lt("logged_at", value: endS) // end bound is exclusive (next-day start)
                 .order("logged_at", ascending: false)
                 .execute()
                 .value
@@ -276,7 +276,7 @@ final class NutritionManager: ObservableObject {
                 )
                 .eq("user_id", value: uid)
                 .gte("logged_at", value: startS)
-                .lte("logged_at", value: endS)
+                .lt("logged_at", value: endS) // end bound is exclusive (next-day start)
                 .order("logged_at", ascending: false)
                 .execute()
                 .value
